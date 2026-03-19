@@ -4,39 +4,25 @@
       Background="White">
 
     <Grid Background="White" ClipToBounds="True">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="*" />
-            <RowDefinition Height="2*" />
-            <RowDefinition Height="*" />
-        </Grid.RowDefinitions>
-
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*" />
-            <ColumnDefinition Width="2*" />
-            <ColumnDefinition Width="*" />
-        </Grid.ColumnDefinitions>
-
-        <Border Grid.Row="1"
-                Grid.Column="1"
-                ClipToBounds="True"
+        <Border HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                MaxWidth="980"
+                MaxHeight="620"
                 Background="White"
+                ClipToBounds="True"
                 SnapsToDevicePixels="True"
                 UseLayoutRounding="True">
             <Grid Background="White" ClipToBounds="True">
                 <MediaElement x:Name="IntroVideo"
                               LoadedBehavior="Manual"
                               UnloadedBehavior="Stop"
-                              Stretch="UniformToFill"
+                              Stretch="Uniform"
                               SnapsToDevicePixels="True"
                               UseLayoutRounding="True"
-                              HorizontalAlignment="Stretch"
-                              VerticalAlignment="Stretch"
-                              Margin="0,0,0,-4"
+                              HorizontalAlignment="Center"
+                              VerticalAlignment="Center"
                               MediaEnded="IntroVideo_MediaEnded"
                               MediaFailed="IntroVideo_MediaFailed"/>
-                <Border Height="6"
-                        VerticalAlignment="Bottom"
-                        Background="White"/>
             </Grid>
         </Border>
     </Grid>
