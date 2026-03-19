@@ -70,6 +70,9 @@ namespace EAClient.Pages
                 }
                 catch { /* Use defaults from login response */ }
 
+                // Save credentials for auto-login
+                CredentialService.Save(result.RefreshToken, result.User.Id);
+
                 NavigationService.Navigate(new DashboardPage());
             }
             catch (Exception ex)

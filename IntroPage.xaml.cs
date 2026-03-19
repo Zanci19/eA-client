@@ -1,7 +1,8 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using EAClient.Services;
 
 namespace EAClient.Pages
 {
@@ -22,7 +23,7 @@ namespace EAClient.Pages
 
             if (!File.Exists(videoPath))
             {
-                _frame.Navigate(new LoginPage());
+                NavigateAfterIntro();
                 return;
             }
 
@@ -31,12 +32,25 @@ namespace EAClient.Pages
         }
 
         private void IntroVideo_MediaEnded(object sender, RoutedEventArgs e)
-        {
-            _frame.Navigate(new LoginPage());
-        }
+            => NavigateAfterIntro();
 
         private void IntroVideo_MediaFailed(object sender, ExceptionRoutedEventArgs e)
+            => NavigateAfterIntro();
+
+        private void NavigateAfterIntro()
         {
+            // Check first-run setup
+            if (PreferencesService.IsFirstRun())
+            {
+                _frame.Navigate(new SetupWizardPage(_frame));
+                return;
+            }
+            // Check saved credentials for auto-login
+            if (CredentialService.HasSaved())
+            {
+                _frame.Navigate(new AutoLoginPage(_frame));
+                return;
+            }
             _frame.Navigate(new LoginPage());
         }
     }

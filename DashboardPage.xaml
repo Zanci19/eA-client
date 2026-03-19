@@ -86,6 +86,8 @@
                             Style="{StaticResource NavBtnStyle}" Click="NavEval_Click"/>
                     <Button x:Name="NavProfile"  Content="👤  Profil"
                             Style="{StaticResource NavBtnStyle}" Click="NavProfile_Click"/>
+                    <Button x:Name="NavSettings" Content="⚙️  Nastavitve"
+                            Style="{StaticResource NavBtnStyle}" Click="NavSettings_Click"/>
                 </StackPanel>
 
             </DockPanel>

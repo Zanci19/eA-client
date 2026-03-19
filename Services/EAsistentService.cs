@@ -24,7 +24,11 @@ namespace EAClient.Services
             request.Headers.TryAddWithoutValidation("x-client-platform", "android");
             request.Headers.TryAddWithoutValidation("app", "new_mobile_app");
             if (!string.IsNullOrEmpty(token))
+            {
                 request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {token}");
+                if (AuthState.UserId > 0)
+                    request.Headers.TryAddWithoutValidation("X-Child-Id", AuthState.UserId.ToString());
+            }
             return request;
         }
 

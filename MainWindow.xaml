@@ -1,7 +1,7 @@
 ﻿<Window x:Class="EAClient.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="EA Client"
+        Title="eAsistent"
         Width="1200"
         Height="800"
         WindowStartupLocation="CenterScreen">

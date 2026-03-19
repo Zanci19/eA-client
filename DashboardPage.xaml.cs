@@ -47,8 +47,12 @@ namespace EAClient.Pages
         private void NavProfile_Click(object sender, RoutedEventArgs e)
             => ContentFrame.Navigate(new ProfilePage());
 
+        private void NavSettings_Click(object sender, RoutedEventArgs e)
+            => ContentFrame.Navigate(new SettingsPage());
+
         private void LogoutBtn_Click(object sender, RoutedEventArgs e)
         {
+            CredentialService.Delete();
             AuthState.Clear();
             NavigationService.Navigate(new LoginPage());
         }
