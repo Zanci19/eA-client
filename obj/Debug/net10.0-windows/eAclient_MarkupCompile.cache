@@ -4,17 +4,17 @@
 winexe
 C#
 .cs
-C:\Users\Zanci19\Desktop\eAclient\eAclient\obj\Debug\net10.0-windows\
+/home/runner/work/eA-client/eA-client/obj/Debug/net10.0-windows/
 eAclient
 none
 false
 TRACE;DEBUG;NET;NET10_0;NETCOREAPP;WINDOWS;WINDOWS7_0;NET5_0_OR_GREATER;NET6_0_OR_GREATER;NET7_0_OR_GREATER;NET8_0_OR_GREATER;NET9_0_OR_GREATER;NET10_0_OR_GREATER;NETCOREAPP3_0_OR_GREATER;NETCOREAPP3_1_OR_GREATER;WINDOWS7_0_OR_GREATER
-C:\Users\Zanci19\Desktop\eAclient\eAclient\App.xaml
-3-1777400976
-1-2064127216
-61353749955
-206-81868862
-HomePage.xaml;IntroPage.xaml;MainWindow.xaml;
+/home/runner/work/eA-client/eA-client/App.xaml
+13-1688174947
+1406250747
+26-1002129545
+2061498700300
+AbsencesPage.xaml;DashboardPage.xaml;EvaluationsPage.xaml;FoodPage.xaml;GradesPage.xaml;HomePage.xaml;HomeworkPage.xaml;IntroPage.xaml;LoginPage.xaml;MainWindow.xaml;OverviewPage.xaml;ProfilePage.xaml;TimetablePage.xaml;
 
 False
 

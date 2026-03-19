@@ -1,0 +1,80 @@
+﻿<Page x:Class="EAClient.Pages.TimetablePage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      Background="#F5F7FA"
+      FontFamily="Arial">
+
+    <Page.Resources>
+        <Style x:Key="NavBtn" TargetType="Button">
+            <Setter Property="Background" Value="#E8F0FE"/>
+            <Setter Property="Foreground" Value="#0066CC"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="14,7"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" CornerRadius="5"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#C8DCFF"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Page.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Title bar -->
+        <Border Grid.Row="0" Background="#0066CC" Padding="20,14">
+            <TextBlock Text="Urnik" Foreground="White" FontSize="20" FontWeight="Bold"/>
+        </Border>
+
+        <!-- Week navigation -->
+        <Border Grid.Row="1" Background="White" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1" Padding="16,10">
+            <DockPanel>
+                <Button Content="◀  Prejšnji teden" DockPanel.Dock="Left"
+                        Style="{StaticResource NavBtn}" Click="PrevWeek_Click"/>
+                <Button Content="Naslednji teden  ▶" DockPanel.Dock="Right"
+                        Style="{StaticResource NavBtn}" Click="NextWeek_Click"/>
+                <TextBlock x:Name="WeekLabel" HorizontalAlignment="Center" VerticalAlignment="Center"
+                           FontSize="14" FontWeight="Bold" Foreground="#333"/>
+            </DockPanel>
+        </Border>
+
+        <!-- Content area -->
+        <Grid Grid.Row="2">
+
+            <StackPanel x:Name="LoadingPanel" VerticalAlignment="Center" HorizontalAlignment="Center">
+                <TextBlock Text="Nalaganje..." FontSize="16" Foreground="#888"/>
+            </StackPanel>
+
+            <StackPanel x:Name="ErrorPanel" Visibility="Collapsed"
+                        VerticalAlignment="Center" HorizontalAlignment="Center">
+                <TextBlock x:Name="ErrorText" Foreground="#CC0000" TextWrapping="Wrap"
+                           MaxWidth="420" TextAlignment="Center" FontSize="14"/>
+                <Button Content="Poskusi znova" Margin="0,14,0,0" Padding="20,9"
+                        Click="Retry_Click" Cursor="Hand" Style="{StaticResource NavBtn}"
+                        Background="#0066CC" Foreground="White"/>
+            </StackPanel>
+
+            <ScrollViewer x:Name="ContentPanel" Visibility="Collapsed"
+                          HorizontalScrollBarVisibility="Auto"
+                          VerticalScrollBarVisibility="Auto">
+                <Grid x:Name="TimetableGrid" Margin="10"/>
+            </ScrollViewer>
+
+        </Grid>
+    </Grid>
+</Page>

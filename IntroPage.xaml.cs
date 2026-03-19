@@ -22,8 +22,7 @@ namespace EAClient.Pages
 
             if (!File.Exists(videoPath))
             {
-                MessageBox.Show("Video not found:\n" + videoPath);
-                _frame.Navigate(new HomePage());
+                _frame.Navigate(new LoginPage());
                 return;
             }
 
@@ -33,13 +32,12 @@ namespace EAClient.Pages
 
         private void IntroVideo_MediaEnded(object sender, RoutedEventArgs e)
         {
-            _frame.Navigate(new HomePage());
+            _frame.Navigate(new LoginPage());
         }
 
         private void IntroVideo_MediaFailed(object sender, ExceptionRoutedEventArgs e)
         {
-            MessageBox.Show("Video failed:\n" + e.ErrorException.Message);
-            _frame.Navigate(new HomePage());
+            _frame.Navigate(new LoginPage());
         }
     }
 }
