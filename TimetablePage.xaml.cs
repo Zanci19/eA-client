@@ -71,7 +71,7 @@ namespace EAClient.Pages
                     Foreground = Brushes.Gray,
                     HorizontalAlignment = HorizontalAlignment.Center,
                     VerticalAlignment = VerticalAlignment.Center,
-                    Margin = new Thickness(20,20,20,20)
+                    Margin = new Thickness(20)
                 });
                 return;
             }
@@ -82,22 +82,30 @@ namespace EAClient.Pages
                 .OrderBy(t => t.From)
                 .ToList();
 
-            // Column definitions: time label + 5 days
-            TimetableGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(78) });
+            var headerCornerRadius = AppTheme.IsSleek ? 18d : 0d;
+            var cellCornerRadius = AppTheme.IsSleek ? 16d : 4d;
+            var eventCornerRadius = AppTheme.IsSleek ? 16d : 4d;
+            var cellSpacing = AppTheme.IsSleek ? 8d : 0d;
+
+            TimetableGrid.Margin = new Thickness(AppTheme.IsSleek ? 16 : 10);
+            TimetableGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(88) });
             for (int d = 0; d < 5; d++)
-                TimetableGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 130 });
+                TimetableGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 150 });
 
-            // Row definitions: header + one per slot
-            TimetableGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(46) });
+            TimetableGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(AppTheme.IsSleek ? 58 : 46) });
             foreach (var _ in timeSlots)
-                TimetableGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(68) });
+                TimetableGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(AppTheme.IsSleek ? 88 : 68) });
 
-            // Top-left corner cell
-            var corner = new Border { Background = new SolidColorBrush(Color.FromRgb(20, 26, 40)) };
-            Grid.SetRow(corner, 0); Grid.SetColumn(corner, 0);
+            var corner = new Border
+            {
+                Background = new SolidColorBrush(Color.FromRgb(20, 26, 40)),
+                CornerRadius = new CornerRadius(headerCornerRadius, 0, 0, 0),
+                Margin = new Thickness(0, 0, cellSpacing, cellSpacing)
+            };
+            Grid.SetRow(corner, 0);
+            Grid.SetColumn(corner, 0);
             TimetableGrid.Children.Add(corner);
 
-            // Day headers
             string[] dayNames = { "Ponedeljek", "Torek", "Sreda", "Četrtek", "Petek" };
             for (int d = 0; d < 5; d++)
             {
@@ -109,35 +117,42 @@ namespace EAClient.Pages
                 var header = new Border
                 {
                     Background = bg,
-                    BorderBrush = new SolidColorBrush(Color.FromArgb(60, 255, 255, 255)),
-                    BorderThickness = new Thickness(0, 0, 1, 0)
+                    CornerRadius = new CornerRadius(
+                        d == 0 ? headerCornerRadius : 0,
+                        d == 4 ? headerCornerRadius : 0,
+                        0,
+                        0),
+                    Margin = new Thickness(0, 0, d == 4 ? 0 : cellSpacing, cellSpacing),
+                    Padding = new Thickness(10)
                 };
                 header.Child = new TextBlock
                 {
                     Text = $"{dayNames[d]}\n{date:dd.MM.}",
                     Foreground = Brushes.White,
-                    FontWeight = isToday ? FontWeights.Bold : FontWeights.Normal,
+                    FontWeight = isToday ? FontWeights.Bold : FontWeights.SemiBold,
                     FontSize = 12,
                     TextAlignment = TextAlignment.Center,
                     VerticalAlignment = VerticalAlignment.Center,
                     HorizontalAlignment = HorizontalAlignment.Center
                 };
-                Grid.SetRow(header, 0); Grid.SetColumn(header, d + 1);
+                Grid.SetRow(header, 0);
+                Grid.SetColumn(header, d + 1);
                 TimetableGrid.Children.Add(header);
             }
 
-            // Time slot rows
             for (int i = 0; i < timeSlots.Count; i++)
             {
                 var (from, to) = timeSlots[i];
                 int row = i + 1;
 
-                // Time label
                 var timeBorder = new Border
                 {
-                    Background = new SolidColorBrush(Color.FromRgb(245, 247, 250)),
+                    Background = AppTheme.IsSleek ? new SolidColorBrush(Color.FromRgb(250, 251, 253)) : new SolidColorBrush(Color.FromRgb(245, 247, 250)),
                     BorderBrush = new SolidColorBrush(Color.FromRgb(220, 225, 235)),
-                    BorderThickness = new Thickness(0, 0, 1, 1)
+                    BorderThickness = new Thickness(1),
+                    CornerRadius = new CornerRadius(cellCornerRadius),
+                    Margin = new Thickness(0, 0, cellSpacing, row == timeSlots.Count ? 0 : cellSpacing),
+                    Padding = new Thickness(8)
                 };
                 timeBorder.Child = new TextBlock
                 {
@@ -148,10 +163,10 @@ namespace EAClient.Pages
                     VerticalAlignment = VerticalAlignment.Center,
                     HorizontalAlignment = HorizontalAlignment.Center
                 };
-                Grid.SetRow(timeBorder, row); Grid.SetColumn(timeBorder, 0);
+                Grid.SetRow(timeBorder, row);
+                Grid.SetColumn(timeBorder, 0);
                 TimetableGrid.Children.Add(timeBorder);
 
-                // Day cells
                 for (int d = 0; d < 5; d++)
                 {
                     var date = monday.AddDays(d);
@@ -160,17 +175,20 @@ namespace EAClient.Pages
                     var dateStr = date.ToString("yyyy-MM-dd");
                     var ev = events.FirstOrDefault(e => e.Date == dateStr && e.From == from);
 
-                    Color cellBg;
-                    if (isCurrent)        cellBg = Color.FromRgb(255, 243, 200);
-                    else if (isToday)     cellBg = Color.FromRgb(232, 240, 254);
-                    else                  cellBg = Colors.White;
+                    Color cellBg = isCurrent
+                        ? Color.FromRgb(255, 247, 221)
+                        : isToday
+                            ? Color.FromRgb(241, 247, 255)
+                            : AppTheme.IsSleek ? Color.FromRgb(252, 253, 255) : Colors.White;
 
                     var cell = new Border
                     {
                         Background = new SolidColorBrush(cellBg),
-                        BorderBrush = new SolidColorBrush(Color.FromRgb(220, 225, 235)),
-                        BorderThickness = new Thickness(0, 0, 1, 1),
-                        Padding = new Thickness(6, 5, 6, 5)
+                        BorderBrush = new SolidColorBrush(Color.FromRgb(228, 232, 240)),
+                        BorderThickness = new Thickness(1),
+                        CornerRadius = new CornerRadius(cellCornerRadius),
+                        Margin = new Thickness(0, 0, d == 4 ? 0 : cellSpacing, row == timeSlots.Count ? 0 : cellSpacing),
+                        Padding = new Thickness(AppTheme.IsSleek ? 8 : 6)
                     };
 
                     if (ev != null)
@@ -181,11 +199,11 @@ namespace EAClient.Pages
 
                         var evBorder = new Border
                         {
-                            Background = new SolidColorBrush(Color.FromArgb(28, evColor.R, evColor.G, evColor.B)),
+                            Background = new SolidColorBrush(Color.FromArgb(AppTheme.IsSleek ? (byte)40 : (byte)28, evColor.R, evColor.G, evColor.B)),
                             BorderBrush = new SolidColorBrush(evColor),
-                            BorderThickness = new Thickness(3, 0, 0, 0),
-                            CornerRadius = new CornerRadius(0, 4, 4, 0),
-                            Padding = new Thickness(7, 4, 5, 4)
+                            BorderThickness = new Thickness(AppTheme.IsSleek ? 1.5 : 3, AppTheme.IsSleek ? 1.5 : 0, AppTheme.IsSleek ? 1.5 : 0, AppTheme.IsSleek ? 1.5 : 0),
+                            CornerRadius = new CornerRadius(eventCornerRadius),
+                            Padding = new Thickness(AppTheme.IsSleek ? 10 : 7, AppTheme.IsSleek ? 8 : 4, AppTheme.IsSleek ? 10 : 5, AppTheme.IsSleek ? 8 : 4)
                         };
                         var sp = new StackPanel();
                         sp.Children.Add(new TextBlock
@@ -215,7 +233,8 @@ namespace EAClient.Pages
                         cell.Child = evBorder;
                     }
 
-                    Grid.SetRow(cell, row); Grid.SetColumn(cell, d + 1);
+                    Grid.SetRow(cell, row);
+                    Grid.SetColumn(cell, d + 1);
                     TimetableGrid.Children.Add(cell);
                 }
             }

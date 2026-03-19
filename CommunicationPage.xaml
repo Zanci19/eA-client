@@ -31,7 +31,6 @@
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                         <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
                     <StackPanel>
@@ -43,31 +42,73 @@
                         <StackPanel x:Name="MessagesPanel"/>
                     </ScrollViewer>
 
-                    <Border Grid.Row="2" x:Name="ComposerCard" Padding="14" Margin="0,0,0,16">
+                    <Border Grid.Row="2" x:Name="ComposerCard" Padding="14">
                         <DockPanel>
                             <Button x:Name="RefreshButton" Content="Osveži" DockPanel.Dock="Right" Click="RefreshButton_Click" Margin="12,0,0,0" Padding="16,8"/>
                             <Button x:Name="SendButton" Content="Pošlji" DockPanel.Dock="Right" Click="SendButton_Click" Margin="12,0,0,0" Padding="18,8"/>
                             <TextBox x:Name="MessageInput" AcceptsReturn="True" MinHeight="68" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"/>
                         </DockPanel>
                     </Border>
+                </Grid>
+            </Border>
 
-                    <Border Grid.Row="3" x:Name="NewMessageCard" Padding="14">
-                        <StackPanel>
-                            <TextBlock Text="Novo sporočilo" FontSize="15" FontWeight="Bold"/>
-                            <TextBlock x:Name="NewMessageStatus" Margin="0,4,0,0" FontSize="12" Text="Poišči prejemnika in pošlji povsem novo sporočilo."/>
+            <Button x:Name="ComposeFloatingButton"
+                    Grid.Column="2"
+                    Width="64"
+                    Height="64"
+                    Content="＋"
+                    FontSize="28"
+                    FontWeight="SemiBold"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Bottom"
+                    Margin="0,0,24,24"
+                    Click="ComposeFloatingButton_Click"
+                    Cursor="Hand"/>
+        </Grid>
 
-                            <DockPanel Margin="0,12,0,0">
-                                <Button x:Name="SearchRecipientsButton" Content="Najdi" DockPanel.Dock="Right" Click="SearchRecipientsButton_Click" Margin="12,0,0,0" Padding="16,8"/>
-                                <TextBox x:Name="NewMessageRecipientInput" MinHeight="38" VerticalContentAlignment="Center" Text="" ToolTip="Vnesi ime ali priimek prejemnika"/>
-                            </DockPanel>
+        <Grid x:Name="ComposeOverlay" Grid.RowSpan="2" Background="#CCFFFFFF" Visibility="Collapsed">
+            <Border x:Name="ComposeOverlayCard"
+                    Margin="28"
+                    Padding="24"
+                    HorizontalAlignment="Stretch"
+                    VerticalAlignment="Stretch">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
 
-                            <ListBox x:Name="ContactResultsList" Margin="0,10,0,0" Height="120" BorderThickness="0" SelectionChanged="ContactResultsList_SelectionChanged"/>
+                    <DockPanel>
+                        <Button x:Name="CloseComposeButton" Content="Zapri" DockPanel.Dock="Right" Click="CloseComposeButton_Click" Padding="14,8" Margin="12,0,0,0"/>
+                        <TextBlock Text="Novo sporočilo" FontSize="18" FontWeight="Bold" VerticalAlignment="Center"/>
+                    </DockPanel>
 
-                            <TextBox x:Name="NewMessageTitleInput" Margin="0,10,0,0" MinHeight="38" VerticalContentAlignment="Center" ToolTip="Zadeva"/>
-                            <TextBox x:Name="NewMessageBodyInput" Margin="0,10,0,0" AcceptsReturn="True" MinHeight="90" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" ToolTip="Sporočilo"/>
-                            <Button x:Name="SendNewMessageButton" Content="Pošlji novo sporočilo" Click="SendNewMessageButton_Click" Margin="0,12,0,0" Padding="18,8" HorizontalAlignment="Left"/>
-                        </StackPanel>
-                    </Border>
+                    <TextBlock x:Name="NewMessageStatus" Grid.Row="1" Margin="0,10,0,0" FontSize="12" Text="Poišči prejemnika in pošlji povsem novo sporočilo."/>
+
+                    <StackPanel Grid.Row="2" Margin="0,16,0,0">
+                        <DockPanel>
+                            <Button x:Name="SearchRecipientsButton" Content="Najdi" DockPanel.Dock="Right" Click="SearchRecipientsButton_Click" Margin="12,0,0,0" Padding="16,8"/>
+                            <TextBox x:Name="NewMessageRecipientInput" MinHeight="38" VerticalContentAlignment="Center" ToolTip="Vnesi ime ali priimek prejemnika"/>
+                        </DockPanel>
+
+                        <ListBox x:Name="ContactResultsList" Margin="0,10,0,0" Height="140" BorderThickness="0" SelectionChanged="ContactResultsList_SelectionChanged"/>
+                    </StackPanel>
+
+                    <Grid Grid.Row="3" Margin="0,16,0,0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <TextBox x:Name="NewMessageTitleInput" MinHeight="38" VerticalContentAlignment="Center" ToolTip="Zadeva"/>
+                        <TextBox x:Name="NewMessageBodyInput" Grid.Row="1" Margin="0,10,0,0" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" ToolTip="Sporočilo"/>
+                    </Grid>
+
+                    <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+                        <Button x:Name="SendNewMessageButton" Content="Pošlji novo sporočilo" Click="SendNewMessageButton_Click" Padding="18,8"/>
+                    </StackPanel>
                 </Grid>
             </Border>
         </Grid>

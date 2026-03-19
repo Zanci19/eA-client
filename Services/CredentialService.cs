@@ -9,6 +9,7 @@ namespace EAClient.Services
     public sealed class SavedSession
     {
         public string Username { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
         public string RefreshToken { get; set; } = string.Empty;
         public int UserId { get; set; }
         public DateTimeOffset SavedAtUtc { get; set; } = DateTimeOffset.UtcNow;
@@ -24,11 +25,12 @@ namespace EAClient.Services
 
         private static string FilePath => Path.Combine(DirectoryPath, "session.dat");
 
-        public static void Save(string username, string refreshToken, int userId)
+        public static void Save(string username, string password, string refreshToken, int userId)
         {
             var payload = new SavedSession
             {
                 Username = username,
+                Password = password,
                 RefreshToken = refreshToken,
                 UserId = userId,
                 SavedAtUtc = DateTimeOffset.UtcNow
@@ -64,7 +66,13 @@ namespace EAClient.Services
                 var decrypted = ProtectedData.Unprotect(encrypted, Entropy, DataProtectionScope.CurrentUser);
                 var session = JsonSerializer.Deserialize<SavedSession>(Encoding.UTF8.GetString(decrypted));
 
-                if (session == null || string.IsNullOrWhiteSpace(session.RefreshToken))
+                if (session == null)
+                {
+                    return null;
+                }
+
+                if (string.IsNullOrWhiteSpace(session.RefreshToken)
+                    && (string.IsNullOrWhiteSpace(session.Username) || string.IsNullOrWhiteSpace(session.Password)))
                 {
                     return null;
                 }
