@@ -4,7 +4,7 @@
       Background="White"
       FontFamily="Arial">
 
-    <Grid>
+    <Grid x:Name="RootGrid" Background="White">
         <Grid.RowDefinitions>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
@@ -12,81 +12,37 @@
         </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*"/>
-            <ColumnDefinition Width="420"/>
+            <ColumnDefinition Width="460"/>
             <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
 
-        <Border Grid.Row="1" Grid.Column="1"
+        <Border Grid.Row="1" Grid.Column="1" x:Name="LoginCard"
                 Background="White"
                 BorderBrush="#E0E0E0"
                 BorderThickness="1"
-                CornerRadius="12"
+                CornerRadius="16"
                 Padding="48,40">
-            <StackPanel>
+            <StackPanel x:Name="LoginStack">
+                <TextBlock Text="eAsistent" FontSize="38" FontWeight="Bold" Foreground="#0066CC" HorizontalAlignment="Center" Margin="0,0,0,6"/>
+                <TextBlock Text="Prijavite se v svoj račun" FontSize="14" Foreground="#888" HorizontalAlignment="Center" Margin="0,0,0,10"/>
+                <TextBlock x:Name="AutoLoginHint" Text="Po prijavi si aplikacija šifrirano zapomni sejo za samodejno prijavo." FontSize="12" Foreground="#6A7485" TextAlignment="Center" Margin="0,0,0,28" TextWrapping="Wrap"/>
 
-                <!-- Logo area -->
-                <TextBlock Text="eAsistent"
-                           FontSize="38"
-                           FontWeight="Bold"
-                           Foreground="#0066CC"
-                           HorizontalAlignment="Center"
-                           Margin="0,0,0,6"/>
-                <TextBlock Text="Prijavite se v svoj račun"
-                           FontSize="14"
-                           Foreground="#888"
-                           HorizontalAlignment="Center"
-                           Margin="0,0,0,36"/>
-
-                <!-- Username -->
-                <TextBlock Text="Uporabniško ime:"
-                           FontSize="13"
-                           Foreground="#333"
-                           Margin="0,0,0,6"/>
-                <Border BorderBrush="#CCCCCC" BorderThickness="1" CornerRadius="6" Margin="0,0,0,18">
-                    <TextBox x:Name="UsernameBox"
-                             FontSize="14"
-                             Padding="10,9"
-                             BorderThickness="0"
-                             Background="Transparent"
-                             KeyDown="Input_KeyDown"/>
+                <TextBlock Text="Uporabniško ime:" FontSize="13" Foreground="#333" Margin="0,0,0,6"/>
+                <Border x:Name="UsernameBorder" BorderBrush="#CCCCCC" BorderThickness="1" CornerRadius="8" Margin="0,0,0,18">
+                    <TextBox x:Name="UsernameBox" FontSize="14" Padding="10,9" BorderThickness="0" Background="Transparent" KeyDown="Input_KeyDown"/>
                 </Border>
 
-                <!-- Password -->
-                <TextBlock Text="Geslo:"
-                           FontSize="13"
-                           Foreground="#333"
-                           Margin="0,0,0,6"/>
-                <Border BorderBrush="#CCCCCC" BorderThickness="1" CornerRadius="6" Margin="0,0,0,28">
-                    <PasswordBox x:Name="PasswordBox"
-                                 FontSize="14"
-                                 Padding="10,9"
-                                 BorderThickness="0"
-                                 Background="Transparent"
-                                 KeyDown="Input_KeyDown"/>
+                <TextBlock Text="Geslo:" FontSize="13" Foreground="#333" Margin="0,0,0,6"/>
+                <Border x:Name="PasswordBorder" BorderBrush="#CCCCCC" BorderThickness="1" CornerRadius="8" Margin="0,0,0,24">
+                    <PasswordBox x:Name="PasswordBox" FontSize="14" Padding="10,9" BorderThickness="0" Background="Transparent" KeyDown="Input_KeyDown"/>
                 </Border>
 
-                <!-- Error text -->
-                <TextBlock x:Name="ErrorText"
-                           Foreground="#CC0000"
-                           FontSize="13"
-                           TextWrapping="Wrap"
-                           Visibility="Collapsed"
-                           Margin="0,0,0,14"/>
+                <CheckBox x:Name="RememberMeCheckBox" Content="Zapomni si prijavo na tej napravi" IsChecked="True" Margin="0,0,0,18" Foreground="#465064"/>
 
-                <!-- Status text -->
-                <TextBlock x:Name="StatusText"
-                           Foreground="#0066CC"
-                           FontSize="13"
-                           Visibility="Collapsed"
-                           Margin="0,0,0,14"/>
+                <TextBlock x:Name="ErrorText" Foreground="#CC0000" FontSize="13" TextWrapping="Wrap" Visibility="Collapsed" Margin="0,0,0,14"/>
+                <TextBlock x:Name="StatusText" Foreground="#0066CC" FontSize="13" Visibility="Collapsed" Margin="0,0,0,14"/>
 
-                <!-- Login button -->
-                <Button x:Name="LoginButton"
-                        Content="Prijava"
-                        FontSize="15"
-                        FontWeight="Bold"
-                        Cursor="Hand"
-                        Click="LoginButton_Click">
+                <Button x:Name="LoginButton" Content="Prijava" FontSize="15" FontWeight="Bold" Cursor="Hand" Click="LoginButton_Click">
                     <Button.Style>
                         <Style TargetType="Button">
                             <Setter Property="Background" Value="#0066CC"/>
@@ -96,11 +52,8 @@
                             <Setter Property="Template">
                                 <Setter.Value>
                                     <ControlTemplate TargetType="Button">
-                                        <Border Background="{TemplateBinding Background}"
-                                                CornerRadius="6"
-                                                Padding="{TemplateBinding Padding}">
-                                            <ContentPresenter HorizontalAlignment="Center"
-                                                              VerticalAlignment="Center"/>
+                                        <Border Background="{TemplateBinding Background}" CornerRadius="8" Padding="{TemplateBinding Padding}">
+                                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                         </Border>
                                         <ControlTemplate.Triggers>
                                             <Trigger Property="IsMouseOver" Value="True">
@@ -116,7 +69,6 @@
                         </Style>
                     </Button.Style>
                 </Button>
-
             </StackPanel>
         </Border>
     </Grid>

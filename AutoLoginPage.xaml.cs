@@ -1,5 +1,4 @@
-using System;
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using EAClient.Services;
@@ -26,6 +25,13 @@ namespace EAClient.Pages
         {
             try
             {
+                var prefs = PreferencesService.Load();
+                if (!prefs.AutoLoginEnabled)
+                {
+                    _frame.Navigate(new LoginPage());
+                    return;
+                }
+
                 var saved = CredentialService.Load();
                 if (saved == null)
                 {
@@ -33,43 +39,36 @@ namespace EAClient.Pages
                     return;
                 }
 
-                var (refreshToken, userId) = saved.Value;
-                AuthState.UserId = userId;
+                AuthState.UserId = saved.UserId;
+                StatusText.Text = string.IsNullOrWhiteSpace(saved.Username)
+                    ? "Osveževanje seje..."
+                    : $"Samodejna prijava za {saved.Username}...";
 
-                StatusText.Text = "Osveževanje seje...";
-
-                // Refresh the access token
-                var newToken = await EAsistentService.RefreshTokenAsync(refreshToken);
+                var newToken = await EAsistentService.RefreshTokenAsync(saved.RefreshToken);
                 AuthState.AccessToken = newToken;
-                AuthState.RefreshToken = refreshToken;
+                AuthState.RefreshToken = saved.RefreshToken;
 
-                // Save updated state
-                CredentialService.Save(refreshToken, userId);
+                CredentialService.Save(saved.Username, saved.RefreshToken, saved.UserId);
 
-                // Enrich with child info
                 try
                 {
                     var childInfo = await EAsistentService.GetChildInfoAsync(newToken);
-                    if (childInfo.TryGetProperty("display_name", out var dn))
-                        AuthState.DisplayName = dn.GetString() ?? string.Empty;
-                    if (childInfo.TryGetProperty("short_name", out var sn))
-                        AuthState.ShortName = sn.GetString() ?? string.Empty;
-                    if (childInfo.TryGetProperty("plus_enabled", out var pe))
-                        AuthState.PlusEnabled = pe.GetBoolean();
-                    if (childInfo.TryGetProperty("student_id", out var sid))
-                        AuthState.StudentId = sid.GetInt32();
-                    if (childInfo.TryGetProperty("type", out var ut))
-                        AuthState.UserType = ut.GetString() ?? "child";
-                    else
-                        AuthState.UserType = "child";
+                    if (childInfo.TryGetProperty("display_name", out var dn)) AuthState.DisplayName = dn.GetString() ?? string.Empty;
+                    if (childInfo.TryGetProperty("short_name", out var sn)) AuthState.ShortName = sn.GetString() ?? string.Empty;
+                    if (childInfo.TryGetProperty("plus_enabled", out var pe)) AuthState.PlusEnabled = pe.GetBoolean();
+                    if (childInfo.TryGetProperty("student_id", out var sid)) AuthState.StudentId = sid.GetInt32();
+                    if (childInfo.TryGetProperty("type", out var ut)) AuthState.UserType = ut.GetString() ?? "child";
+                    else AuthState.UserType = "child";
                 }
-                catch { AuthState.UserType = "child"; }
+                catch
+                {
+                    AuthState.UserType = "child";
+                }
 
-                _frame.Navigate(new DashboardPage());
+                AnimationHelper.NavigateWithTransition(_frame, new DashboardPage());
             }
             catch
             {
-                // Token expired or network error – go to login
                 CredentialService.Delete();
                 _frame.Navigate(new LoginPage());
             }

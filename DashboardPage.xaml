@@ -16,13 +16,8 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="bg"
-                                Background="{TemplateBinding Background}"
-                                CornerRadius="6"
-                                Padding="{TemplateBinding Padding}"
-                                Margin="0,1">
-                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
-                                              VerticalAlignment="Center"/>
+                        <Border x:Name="bg" Background="{TemplateBinding Background}" CornerRadius="10" Padding="{TemplateBinding Padding}" Margin="0,2">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
@@ -35,68 +30,37 @@
         </Style>
     </Page.Resources>
 
-    <DockPanel LastChildFill="True">
-
-        <!-- Sidebar -->
-        <Border DockPanel.Dock="Left" Width="225" Background="#1C2333">
+    <DockPanel x:Name="RootPanel" LastChildFill="True">
+        <Border x:Name="Sidebar" DockPanel.Dock="Left" Width="235" Background="#1C2333">
             <DockPanel LastChildFill="True">
-
-                <!-- User info at top -->
-                <Border DockPanel.Dock="Top" Background="#141A28" Padding="16,22,16,18">
+                <Border x:Name="SidebarHeader" DockPanel.Dock="Top" Background="#141A28" Padding="16,22,16,18">
                     <StackPanel>
-                        <Border Width="58" Height="58" CornerRadius="29"
-                                Background="#0066CC" HorizontalAlignment="Center"
-                                Margin="0,0,0,12">
-                            <TextBlock x:Name="AvatarInitial" Text="U"
-                                       FontSize="26" FontWeight="Bold" Foreground="White"
-                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <Border Width="58" Height="58" CornerRadius="29" Background="#0066CC" HorizontalAlignment="Center" Margin="0,0,0,12">
+                            <TextBlock x:Name="AvatarInitial" Text="U" FontSize="26" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
-                        <TextBlock x:Name="UserNameLabel" Text=""
-                                   Foreground="White" FontSize="14" FontWeight="Bold"
-                                   HorizontalAlignment="Center"
-                                   TextTrimming="CharacterEllipsis"/>
-                        <TextBlock x:Name="UserTypeLabel" Text=""
-                                   Foreground="#7A8FB0" FontSize="12"
-                                   HorizontalAlignment="Center" Margin="0,3,0,0"/>
+                        <TextBlock x:Name="UserNameLabel" Text="" Foreground="White" FontSize="14" FontWeight="Bold" HorizontalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                        <TextBlock x:Name="UserTypeLabel" Text="" Foreground="#7A8FB0" FontSize="12" HorizontalAlignment="Center" Margin="0,3,0,0"/>
                     </StackPanel>
                 </Border>
 
-                <!-- Logout at bottom -->
                 <Border DockPanel.Dock="Bottom" Padding="12,12,12,16">
-                    <Button Content="🚪  Odjava" Click="LogoutBtn_Click"
-                            Style="{StaticResource NavBtnStyle}"
-                            Foreground="#FF8888"/>
+                    <Button Content="🚪  Odjava" Click="LogoutBtn_Click" Style="{StaticResource NavBtnStyle}" Foreground="#FF8888"/>
                 </Border>
 
-                <!-- Nav items -->
-                <StackPanel Margin="8,14,8,0">
-                    <Button x:Name="NavHome"     Content="🏠  Domov"
-                            Style="{StaticResource NavBtnStyle}" Click="NavHome_Click"/>
-                    <Button x:Name="NavTimetable" Content="📅  Urnik"
-                            Style="{StaticResource NavBtnStyle}" Click="NavTimetable_Click"/>
-                    <Button x:Name="NavGrades"   Content="📝  Ocene"
-                            Style="{StaticResource NavBtnStyle}" Click="NavGrades_Click"/>
-                    <Button x:Name="NavFood"     Content="🍽  Prehrana"
-                            Style="{StaticResource NavBtnStyle}" Click="NavFood_Click"/>
-                    <Button x:Name="NavHomework" Content="📚  Domače naloge"
-                            Style="{StaticResource NavBtnStyle}" Click="NavHomework_Click"/>
-                    <Button x:Name="NavAbsences" Content="❌  Izostanki"
-                            Style="{StaticResource NavBtnStyle}" Click="NavAbsences_Click"/>
-                    <Button x:Name="NavEval"     Content="📋  Ocenjevanja"
-                            Style="{StaticResource NavBtnStyle}" Click="NavEval_Click"/>
-                    <Button x:Name="NavProfile"  Content="👤  Profil"
-                            Style="{StaticResource NavBtnStyle}" Click="NavProfile_Click"/>
-                    <Button x:Name="NavSettings" Content="⚙️  Nastavitve"
-                            Style="{StaticResource NavBtnStyle}" Click="NavSettings_Click"/>
+                <StackPanel x:Name="NavStack" Margin="8,14,8,0">
+                    <Button x:Name="NavHome" Content="🏠  Domov" Style="{StaticResource NavBtnStyle}" Click="NavHome_Click"/>
+                    <Button x:Name="NavTimetable" Content="📅  Urnik" Style="{StaticResource NavBtnStyle}" Click="NavTimetable_Click"/>
+                    <Button x:Name="NavGrades" Content="📝  Ocene" Style="{StaticResource NavBtnStyle}" Click="NavGrades_Click"/>
+                    <Button x:Name="NavFood" Content="🍽  Prehrana" Style="{StaticResource NavBtnStyle}" Click="NavFood_Click"/>
+                    <Button x:Name="NavHomework" Content="📚  Domače naloge" Style="{StaticResource NavBtnStyle}" Click="NavHomework_Click"/>
+                    <Button x:Name="NavAbsences" Content="❌  Izostanki" Style="{StaticResource NavBtnStyle}" Click="NavAbsences_Click"/>
+                    <Button x:Name="NavEval" Content="📋  Ocenjevanja" Style="{StaticResource NavBtnStyle}" Click="NavEval_Click"/>
+                    <Button x:Name="NavProfile" Content="👤  Profil" Style="{StaticResource NavBtnStyle}" Click="NavProfile_Click"/>
+                    <Button x:Name="NavSettings" Content="⚙️  Nastavitve" Style="{StaticResource NavBtnStyle}" Click="NavSettings_Click"/>
                 </StackPanel>
-
             </DockPanel>
         </Border>
 
-        <!-- Content frame -->
-        <Frame x:Name="ContentFrame"
-               NavigationUIVisibility="Hidden"
-               Background="#F5F7FA"/>
-
+        <Frame x:Name="ContentFrame" NavigationUIVisibility="Hidden" Background="#F5F7FA"/>
     </DockPanel>
 </Page>
