@@ -22,8 +22,10 @@
                       LoadedBehavior="Manual"
                       UnloadedBehavior="Stop"
                       Stretch="Uniform"
+                      SnapsToDevicePixels="True"
+                      UseLayoutRounding="True"
                       HorizontalAlignment="Stretch"
-                      VerticalAlignment="Stretch"
+                      VerticalAlignment="Center"
                       MediaEnded="IntroVideo_MediaEnded"
                       MediaFailed="IntroVideo_MediaFailed"/>
     </Grid>

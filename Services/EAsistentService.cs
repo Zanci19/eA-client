@@ -16,8 +16,6 @@ namespace EAClient.Services
             Timeout = TimeSpan.FromSeconds(30)
         };
 
-        public static string? CurrentToken { get; set; }
-
         private static HttpRequestMessage CreateRequest(HttpMethod method, string url, string? token = null)
         {
             var request = new HttpRequestMessage(method, url);
@@ -116,7 +114,7 @@ namespace EAClient.Services
             {
                 return await GetJsonAsync(token, $"/m/school-catering?from={from:yyyy-MM-dd}&to={to:yyyy-MM-dd}");
             }
-            catch
+            catch (HttpRequestException)
             {
                 return await GetJsonAsync(token, $"/m/school_catering?from={from:yyyy-MM-dd}&to={to:yyyy-MM-dd}");
             }

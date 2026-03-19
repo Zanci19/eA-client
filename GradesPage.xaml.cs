@@ -150,7 +150,7 @@ namespace EAClient.Pages
                     Foreground = new SolidColorBrush(Color.FromRgb(28, 35, 51)),
                     VerticalAlignment = VerticalAlignment.Center
                 });
-                DockPanel.SetDock(headerRow.Children[0] as UIElement ?? new UIElement(), Dock.Left);
+                DockPanel.SetDock(headerRow.Children[0], Dock.Left);
 
                 if (avg > 0)
                 {
