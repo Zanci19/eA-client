@@ -16,7 +16,7 @@ namespace EAClient.Services
 
         private static readonly HttpClient _client = CreateClient("https://www.easistent.com");
         private static readonly HttpClient _communicationClient = CreateClient("https://komunikacija.easistent.com");
-        private static readonly HttpClient _redirectClient = CreateClient(allowAutoRedirect: false);
+        private static readonly HttpClient _sessionBootstrapClient = CreateClient();
 
         private static string _communicationToken = string.Empty;
         private static readonly JsonSerializerOptions _jsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
@@ -376,39 +376,36 @@ namespace EAClient.Services
             {
             }
 
-            var currentUri = new Uri("https://moj.easistent.com/api/external_service?redirect_to=chat");
-
-            for (var i = 0; i < 8; i++)
+            using (var bootstrapRequest = new HttpRequestMessage(HttpMethod.Get, "https://moj.easistent.com/api/external_service?redirect_to=chat"))
             {
-                using var request = new HttpRequestMessage(HttpMethod.Get, currentUri);
-                if (currentUri.Host.Contains("easistent.com", StringComparison.OrdinalIgnoreCase)
-                    && !currentUri.Host.StartsWith("komunikacija", StringComparison.OrdinalIgnoreCase))
+                ApplyCommonHeaders(bootstrapRequest, token);
+                bootstrapRequest.Headers.TryAddWithoutValidation("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
+
+                using var bootstrapResponse = await _sessionBootstrapClient.SendAsync(bootstrapRequest, HttpCompletionOption.ResponseHeadersRead);
+                UpdateCommunicationToken(bootstrapResponse);
+            }
+
+            foreach (var endpoint in new[] { "/api/environment", "/api/logged_in", "/api/me?institution_id=0" })
+            {
+                try
                 {
-                    ApplyCommonHeaders(request, token);
+                    using var probeRequest = CreateCommunicationRequest(HttpMethod.Get, endpoint, token);
+                    using var probeResponse = await _communicationClient.SendAsync(probeRequest);
+                    UpdateCommunicationToken(probeResponse);
+                    if (!string.IsNullOrWhiteSpace(_communicationToken) && probeResponse.IsSuccessStatusCode)
+                    {
+                        return;
+                    }
                 }
-                request.Headers.TryAddWithoutValidation("Accept", "application/json, text/plain, */*");
-
-                using var response = await _redirectClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
-                UpdateCommunicationToken(response);
-
-                if (IsRedirect(response.StatusCode) && response.Headers.Location != null)
+                catch
                 {
-                    currentUri = response.Headers.Location.IsAbsoluteUri
-                        ? response.Headers.Location
-                        : new Uri(currentUri, response.Headers.Location);
-                    continue;
                 }
-
-                break;
             }
 
             using var meRequest = CreateCommunicationRequest(HttpMethod.Get, "/api/me?institution_id=0", token);
             using var meResponse = await _communicationClient.SendAsync(meRequest);
             UpdateCommunicationToken(meResponse);
         }
-
-        private static bool IsRedirect(HttpStatusCode statusCode)
-            => (int)statusCode >= 300 && (int)statusCode < 400;
 
         private static HttpRequestMessage CloneRequest(HttpRequestMessage source, string? token)
         {

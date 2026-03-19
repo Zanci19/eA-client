@@ -292,7 +292,7 @@ namespace EAClient.Pages
                 ApplyMenuSelection(data.Item2, data.Item1, data.Item3);
                 button.Content = "Prijavljen";
                 PopulateSelectedDay();
-                _ = RefreshCurrentWeekSilentlyAsync();
+                _ = RefreshCurrentWeekSilentlyAsync(data.Item2, data.Item1, data.Item3);
             }
             catch (Exception ex)
             {
@@ -302,13 +302,14 @@ namespace EAClient.Pages
             }
         }
 
-        private async Task RefreshCurrentWeekSilentlyAsync()
+        private async Task RefreshCurrentWeekSilentlyAsync(DateTime selectedDate, string type, int selectedMenuId)
         {
             try
             {
                 var to = _currentMonday.AddDays(4);
                 var json = await EAsistentService.GetSchoolCateringAsync(AuthState.AccessToken, _currentMonday, to);
                 _dayEntries = ExtractDayEntries(json).ToList();
+                ApplyMenuSelection(selectedDate, type, selectedMenuId);
                 PopulateSelectedDay();
             }
             catch
