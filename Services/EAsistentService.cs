@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Text;
@@ -17,24 +18,48 @@ namespace EAClient.Services
             Timeout = TimeSpan.FromSeconds(30)
         };
 
+        private static readonly HttpClient _communicationClient = new HttpClient
+        {
+            BaseAddress = new Uri("https://komunikacija.easistent.com"),
+            Timeout = TimeSpan.FromSeconds(30)
+        };
+
+        private static string _communicationToken = string.Empty;
+
         private static HttpRequestMessage CreateRequest(HttpMethod method, string url, string? token = null)
         {
             var request = new HttpRequestMessage(method, WithMobileFlag(url));
-            request.Headers.TryAddWithoutValidation("x-app-name", "child");
-            request.Headers.TryAddWithoutValidation("x-client-version", "11101");
-            request.Headers.TryAddWithoutValidation("x-client-platform", "android");
+            ApplyCommonHeaders(request, token);
             request.Headers.TryAddWithoutValidation("app", "new_mobile_app");
+            return request;
+        }
+
+        private static HttpRequestMessage CreateCommunicationRequest(HttpMethod method, string url, string? token = null, string contentType = "application/json")
+        {
+            var request = new HttpRequestMessage(method, WithMobileFlag(url));
+            ApplyCommonHeaders(request, string.IsNullOrWhiteSpace(token) ? _communicationToken : token);
+            request.Headers.TryAddWithoutValidation("Accept", "application/json");
+            if (!string.IsNullOrWhiteSpace(contentType))
+            {
+                request.Headers.TryAddWithoutValidation("Content-Type", contentType);
+            }
+            return request;
+        }
+
+        private static void ApplyCommonHeaders(HttpRequestMessage request, string? token)
+        {
+            request.Headers.TryAddWithoutValidation("x-app-name", "child");
+            request.Headers.TryAddWithoutValidation("x-client-version", "11102");
+            request.Headers.TryAddWithoutValidation("x-client-platform", "ios");
 
             if (!string.IsNullOrEmpty(token))
             {
                 request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {token}");
                 if (AuthState.UserId > 0)
                 {
-                    request.Headers.TryAddWithoutValidation("X-Child-Id", AuthState.UserId.ToString());
+                    request.Headers.TryAddWithoutValidation("X-Child-Id", $"child_uuid_{AuthState.UserId}");
                 }
             }
-
-            return request;
         }
 
         private static string WithMobileFlag(string url)
@@ -168,6 +193,96 @@ namespace EAClient.Services
             }
 
             throw lastException ?? new Exception("Napaka pri nalaganju prehrane.");
+        }
+
+        public static async Task<JsonElement> SelectMealMenuAsync(string token, string type, DateTime date, int menuId)
+        {
+            var request = CreateRequest(HttpMethod.Post, "/m/meals/meal", token);
+            request.Content = new StringContent(JsonSerializer.Serialize(new
+            {
+                type,
+                date = date.ToString("yyyy-MM-dd"),
+                menu = menuId
+            }), Encoding.UTF8, "application/json");
+
+            var response = await _client.SendAsync(request);
+            var json = await response.Content.ReadAsStringAsync();
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new Exception($"Napaka pri prijavi na meni ({(int)response.StatusCode}): {TryGetErrorMessage(json)}");
+            }
+
+            using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(json) ? "{}" : json);
+            return doc.RootElement.Clone();
+        }
+
+        public static async Task<JsonElement> GetCommunicationNewsAsync(string token)
+            => await SendCommunicationJsonAsync(CreateCommunicationRequest(HttpMethod.Get, "/api/me/news", token));
+
+        public static async Task<JsonElement> GetMessageChannelsAsync(string token, int limit = 20, string? to = null)
+        {
+            var extra = string.IsNullOrWhiteSpace(to) ? string.Empty : $"&to={Uri.EscapeDataString(to)}";
+            return await SendCommunicationJsonAsync(CreateCommunicationRequest(HttpMethod.Get, $"/api/channels?type=message&limit={limit}{extra}", token));
+        }
+
+        public static async Task<JsonElement> GetChannelDetailsAsync(string token, string channelId)
+            => await SendCommunicationJsonAsync(CreateCommunicationRequest(HttpMethod.Get, $"/api/channels/{channelId}", token));
+
+        public static async Task<JsonElement> GetChannelMessagesAsync(string token, string channelId, int limit = 25)
+            => await SendCommunicationJsonAsync(CreateCommunicationRequest(HttpMethod.Get, $"/api/channels/{channelId}/messages?with=files&limit={limit}", token));
+
+        public static async Task<JsonElement> SendChannelMessageAsync(string token, string channelId, string message)
+        {
+            var request = CreateCommunicationRequest(HttpMethod.Post, $"/api/channels/{channelId}/messages", token);
+            request.Content = new StringContent(JsonSerializer.Serialize(new { message }), Encoding.UTF8, "application/json");
+            return await SendCommunicationJsonAsync(request);
+        }
+
+        private static async Task<JsonElement> SendCommunicationJsonAsync(HttpRequestMessage request)
+        {
+            var response = await _communicationClient.SendAsync(request);
+            UpdateCommunicationToken(response);
+            var json = await response.Content.ReadAsStringAsync();
+
+            if (response.StatusCode == HttpStatusCode.Unauthorized && !string.IsNullOrWhiteSpace(AuthState.AccessToken) && request.Headers.Authorization == null)
+            {
+                using var retryRequest = CloneRequest(request, AuthState.AccessToken);
+                response = await _communicationClient.SendAsync(retryRequest);
+                UpdateCommunicationToken(response);
+                json = await response.Content.ReadAsStringAsync();
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new Exception($"Napaka ({(int)response.StatusCode}): {TryGetErrorMessage(json)}");
+            }
+
+            using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(json) ? "{}" : json);
+            return doc.RootElement.Clone();
+        }
+
+        private static HttpRequestMessage CloneRequest(HttpRequestMessage source, string token)
+        {
+            var request = CreateCommunicationRequest(source.Method, source.RequestUri?.PathAndQuery ?? string.Empty, token);
+            if (source.Content != null)
+            {
+                var body = source.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+                var mediaType = source.Content.Headers.ContentType?.MediaType ?? "application/json";
+                request.Content = new StringContent(body, Encoding.UTF8, mediaType);
+            }
+            return request;
+        }
+
+        private static void UpdateCommunicationToken(HttpResponseMessage response)
+        {
+            if (response.Headers.TryGetValues("authorization", out var values))
+            {
+                var header = values.FirstOrDefault();
+                if (!string.IsNullOrWhiteSpace(header) && header.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+                {
+                    _communicationToken = header[7..];
+                }
+            }
         }
 
         public static Task<JsonElement> GetUserAsync(string token)

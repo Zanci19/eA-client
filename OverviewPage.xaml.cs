@@ -17,8 +17,15 @@ namespace EAClient.Pages
             Loaded += OverviewPage_Loaded;
         }
 
+        private void ApplyTheme()
+        {
+            Background = AppTheme.BgBrush;
+            FontFamily = new FontFamily(AppTheme.FontFamily);
+        }
+
         private async void OverviewPage_Loaded(object sender, RoutedEventArgs e)
         {
+            ApplyTheme();
             await LoadDataAsync();
         }
 
@@ -67,6 +74,7 @@ namespace EAClient.Pages
                 PopulateFood(foodJson);
 
                 ShowContent();
+                AnimationHelper.FadeInFromBelow(ContentPanel, 260);
             }
             catch (Exception ex)
             {
