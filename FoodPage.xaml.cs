@@ -228,7 +228,7 @@ namespace EAClient.Pages
             var name = GetStr(menu, "name", GetStr(menu, "title", "Meni"));
             var price = GetStr(menu, "price", string.Empty);
             var description = NormalizeDescription(GetStr(menu, "description", GetStr(menu, "meal", string.Empty)));
-            var selected = GetBool(menu, "selected") || GetBool(menu, "is_primary") || GetBool(menu, "chosen");
+            var selected = IsMenuSelected(menu);
 
             var row = new Border
             {
@@ -257,7 +257,7 @@ namespace EAClient.Pages
             chooseButton.Click += ChooseMenu_Click;
             DockPanel.SetDock(chooseButton, Dock.Right);
             top.Children.Add(chooseButton);
-            top.Children.Add(new TextBlock { Text = name, FontSize = 15, FontWeight = FontWeights.SemiBold, Foreground = AppTheme.TextBrush, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0,0,12,0) });
+            top.Children.Add(new TextBlock { Text = name, FontSize = 15, FontWeight = FontWeights.SemiBold, Foreground = AppTheme.TextBrush, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 12, 0) });
             stack.Children.Add(top);
 
             var meta = new string[]
@@ -289,8 +289,10 @@ namespace EAClient.Pages
             try
             {
                 await EAsistentService.SelectMealMenuAsync(AuthState.AccessToken, data.Item1, data.Item2, data.Item3);
+                ApplyMenuSelection(data.Item2, data.Item1, data.Item3);
                 button.Content = "Prijavljen";
-                await LoadWeekAsync();
+                PopulateSelectedDay();
+                _ = RefreshCurrentWeekSilentlyAsync();
             }
             catch (Exception ex)
             {
@@ -300,12 +302,107 @@ namespace EAClient.Pages
             }
         }
 
+        private async Task RefreshCurrentWeekSilentlyAsync()
+        {
+            try
+            {
+                var to = _currentMonday.AddDays(4);
+                var json = await EAsistentService.GetSchoolCateringAsync(AuthState.AccessToken, _currentMonday, to);
+                _dayEntries = ExtractDayEntries(json).ToList();
+                PopulateSelectedDay();
+            }
+            catch
+            {
+            }
+        }
+
+        private void ApplyMenuSelection(DateTime date, string type, int selectedMenuId)
+        {
+            var updatedDays = new List<JsonElement>();
+
+            foreach (var day in _dayEntries)
+            {
+                if (!DateMatches(day, date))
+                {
+                    updatedDays.Add(day);
+                    continue;
+                }
+
+                updatedDays.Add(UpdateMenusForDay(day, type, selectedMenuId));
+            }
+
+            _dayEntries = updatedDays;
+        }
+
+        private JsonElement UpdateMenusForDay(JsonElement day, string type, int selectedMenuId)
+        {
+            using var document = JsonDocument.Parse(day.GetRawText());
+            var map = JsonSerializer.Deserialize<Dictionary<string, object?>>(document.RootElement.GetRawText()) ?? new();
+
+            if (map.TryGetValue("menus", out var menusObj))
+            {
+                var normalizedType = string.IsNullOrWhiteSpace(type) ? string.Empty : type;
+                var json = JsonSerializer.Serialize(menusObj);
+                using var menusDoc = JsonDocument.Parse(json);
+
+                if (menusDoc.RootElement.ValueKind == JsonValueKind.Array)
+                {
+                    map["menus"] = UpdateMenuArray(menusDoc.RootElement, normalizedType, selectedMenuId);
+                }
+                else if (menusDoc.RootElement.ValueKind == JsonValueKind.Object)
+                {
+                    var nested = JsonSerializer.Deserialize<Dictionary<string, object?>>(menusDoc.RootElement.GetRawText()) ?? new();
+                    foreach (var key in nested.Keys.ToList())
+                    {
+                        using var keyDoc = JsonDocument.Parse(JsonSerializer.Serialize(nested[key]));
+                        if (keyDoc.RootElement.ValueKind == JsonValueKind.Array)
+                        {
+                            nested[key] = UpdateMenuArray(keyDoc.RootElement, key.Equals(type, StringComparison.OrdinalIgnoreCase) ? type : key, selectedMenuId);
+                        }
+                    }
+                    map["menus"] = nested;
+                }
+            }
+
+            var updatedJson = JsonSerializer.Serialize(map);
+            return JsonDocument.Parse(updatedJson).RootElement.Clone();
+        }
+
+        private static List<Dictionary<string, object?>> UpdateMenuArray(JsonElement array, string type, int selectedMenuId)
+        {
+            var updated = new List<Dictionary<string, object?>>();
+            foreach (var item in array.EnumerateArray())
+            {
+                var dict = JsonSerializer.Deserialize<Dictionary<string, object?>>(item.GetRawText()) ?? new();
+                var itemType = GetStr(item, "type", type);
+                var menuId = GetInt(item, "menu", GetInt(item, "id", 0));
+                var isTargetType = string.IsNullOrWhiteSpace(type) || string.Equals(itemType, type, StringComparison.OrdinalIgnoreCase);
+                var selected = isTargetType && menuId == selectedMenuId;
+                dict["selected"] = selected;
+                dict["is_selected"] = selected;
+                dict["chosen"] = selected;
+                dict["is_primary"] = selected;
+                updated.Add(dict);
+            }
+            return updated;
+        }
+
+        private static bool IsMenuSelected(JsonElement menu)
+            => GetBool(menu, "selected")
+               || GetBool(menu, "is_primary")
+               || GetBool(menu, "chosen")
+               || GetBool(menu, "is_selected")
+               || GetBool(menu, "active")
+               || GetBool(menu, "enrolled")
+               || GetBool(menu, "signed_up")
+               || GetBool(menu, "subscribed");
+
         private static string NormalizeDescription(string text)
             => text.Replace("\r", string.Empty).Replace("\n", Environment.NewLine).Trim();
 
         private static string GetStr(JsonElement el, string prop, string fallback)
         {
-            if (el.TryGetProperty(prop, out var v))
+            if (el.ValueKind == JsonValueKind.Object && el.TryGetProperty(prop, out var v))
             {
                 if (v.ValueKind == JsonValueKind.String) return v.GetString() ?? fallback;
                 if (v.ValueKind == JsonValueKind.Number) return v.GetRawText();
@@ -314,10 +411,22 @@ namespace EAClient.Pages
         }
 
         private static int GetInt(JsonElement el, string prop, int fallback)
-            => el.TryGetProperty(prop, out var v) && v.ValueKind == JsonValueKind.Number && v.TryGetInt32(out var number) ? number : fallback;
+            => el.ValueKind == JsonValueKind.Object && el.TryGetProperty(prop, out var v) && v.ValueKind == JsonValueKind.Number && v.TryGetInt32(out var number) ? number : fallback;
 
         private static bool GetBool(JsonElement el, string prop)
-            => el.TryGetProperty(prop, out var v) && (v.ValueKind == JsonValueKind.True || (v.ValueKind == JsonValueKind.Number && v.GetInt32() == 1));
+        {
+            if (el.ValueKind != JsonValueKind.Object || !el.TryGetProperty(prop, out var v))
+                return false;
+
+            return v.ValueKind switch
+            {
+                JsonValueKind.True => true,
+                JsonValueKind.False => false,
+                JsonValueKind.Number => v.TryGetInt32(out var number) && number == 1,
+                JsonValueKind.String => bool.TryParse(v.GetString(), out var parsed) && parsed,
+                _ => false
+            };
+        }
 
         private Border CreateCard()
             => new()

@@ -41,13 +41,12 @@ namespace EAClient.Pages
                 await LoadInstitutionAsync();
 
                 var channelsJson = await EAsistentService.GetMessageChannelsAsync(AuthState.AccessToken, 25);
-                var items = ExtractArray(channelsJson, "data", "channels");
-                foreach (var item in items.EnumerateArray())
+                foreach (var item in ExtractDataItems(channelsJson))
                 {
                     var id = GetStr(item, "id", string.Empty);
                     if (string.IsNullOrWhiteSpace(id)) continue;
-                    var title = GetStr(item, "title", GetNestedStr(item, new[] { "to", "name" }, GetNestedStr(item, new[] { "user", "name" }, "Pogovor")));
-                    var subtitle = GetStr(item, "updated_at", GetNestedStr(item, new[] { "last_message", "message" }, string.Empty));
+                    var title = GetStr(item, "title", GetUserName(GetNested(item, "user"), "Pogovor"));
+                    var subtitle = GetStr(item, "updated_at", string.Empty);
                     _channels.Add((id, title, subtitle, item));
                 }
 
@@ -72,7 +71,7 @@ namespace EAClient.Pages
                 ConversationTitle.Text = "Komunikacija ni na voljo";
                 ConversationMeta.Text = ex.Message;
                 MessagesPanel.Children.Clear();
-                MessagesPanel.Children.Add(BuildHint("Branje komunikacije ni uspelo. Preveri prijavo ali veljavnost žetona."));
+                MessagesPanel.Children.Add(BuildHint("Branje komunikacije ni uspelo. Preveri prijavo ali veljavnost seje."));
             }
         }
 
@@ -83,14 +82,33 @@ namespace EAClient.Pages
                 return;
             }
 
-            var me = await EAsistentService.GetCommunicationMeAsync(AuthState.AccessToken);
-            var institutions = ExtractArray(me, "data", "institutions");
-            foreach (var institution in institutions.EnumerateArray())
+            var institutions = await EAsistentService.GetCommunicationInstitutionsAsync(AuthState.AccessToken);
+            var first = ExtractDataItems(institutions).FirstOrDefault();
+            if (first.ValueKind == JsonValueKind.Object && first.TryGetProperty("id", out var idValue) && idValue.TryGetInt32(out var institutionId))
             {
-                if (institution.TryGetProperty("id", out var idValue) && idValue.TryGetInt32(out var id) && id > 0)
+                _activeInstitutionId = institutionId;
+                return;
+            }
+
+            var me = await EAsistentService.GetCommunicationMeAsync(AuthState.AccessToken);
+            foreach (var user in ExtractDataItems(me))
+            {
+                var nestedInstitutions = GetNested(user, "institutions");
+                if (nestedInstitutions.ValueKind != JsonValueKind.Array)
+                    continue;
+
+                foreach (var institution in nestedInstitutions.EnumerateArray())
                 {
-                    _activeInstitutionId = id;
-                    break;
+                    if (institution.TryGetProperty("external_id", out var extId) && extId.TryGetInt32(out institutionId))
+                    {
+                        _activeInstitutionId = institutionId;
+                        return;
+                    }
+                    if (institution.TryGetProperty("id", out var id) && id.TryGetInt32(out institutionId))
+                    {
+                        _activeInstitutionId = institutionId;
+                        return;
+                    }
                 }
             }
         }
@@ -131,10 +149,11 @@ namespace EAClient.Pages
             {
                 MessagesPanel.Children.Clear();
                 var detailsTask = EAsistentService.GetChannelDetailsAsync(AuthState.AccessToken, channelId);
-                var messagesTask = EAsistentService.GetChannelMessagesAsync(AuthState.AccessToken, channelId, 20);
+                var messagesTask = EAsistentService.GetChannelMessagesAsync(AuthState.AccessToken, channelId, 25);
                 await Task.WhenAll(detailsTask, messagesTask);
-                var details = detailsTask.Result;
-                var messages = ExtractArray(messagesTask.Result, "data", "messages").EnumerateArray().Reverse().ToList();
+
+                var details = ExtractDataItems(detailsTask.Result).FirstOrDefault();
+                var messages = ExtractDataItems(messagesTask.Result).Reverse().ToList();
                 ConversationMeta.Text = GetStr(details, "updated_at", "Pripravljen za pošiljanje in branje sporočil.");
 
                 if (messages.Count == 0)
@@ -160,8 +179,8 @@ namespace EAClient.Pages
 
         private Border BuildMessageBubble(JsonElement message)
         {
-            var mine = GetNestedStr(message, new[] { "author", "id" }, string.Empty) == AuthState.UserId.ToString() || GetBool(message, "mine");
-            var files = ExtractArray(message, "files");
+            var mine = GetInt(message, "user_id", -1) == AuthState.UserId || GetBool(message, "mine");
+            var files = GetNested(message, "files");
             var border = new Border
             {
                 HorizontalAlignment = mine ? HorizontalAlignment.Right : HorizontalAlignment.Left,
@@ -177,13 +196,13 @@ namespace EAClient.Pages
             var stack = new StackPanel();
             stack.Children.Add(new TextBlock
             {
-                Text = GetNestedStr(message, new[] { "author", "name" }, GetStr(message, "user", mine ? "Jaz" : "Pošiljatelj")),
+                Text = GetUserName(GetNested(message, "user"), mine ? "Jaz" : "Pošiljatelj"),
                 FontWeight = FontWeights.Bold,
                 Foreground = mine ? Brushes.White : AppTheme.TextBrush
             });
             stack.Children.Add(new TextBlock
             {
-                Text = GetStr(message, "message", GetStr(message, "text", string.Empty)),
+                Text = StripHtml(GetStr(message, "body", string.Empty)),
                 Margin = new Thickness(0, 6, 0, 0),
                 TextWrapping = TextWrapping.Wrap,
                 Foreground = mine ? Brushes.White : AppTheme.TextBrush
@@ -232,7 +251,7 @@ namespace EAClient.Pages
             }
             finally
             {
-                SendButton.IsEnabled = true;
+                SendButton.IsEnabled = !string.IsNullOrWhiteSpace(_selectedChannelId);
             }
         }
 
@@ -257,18 +276,11 @@ namespace EAClient.Pages
             {
                 await LoadInstitutionAsync();
                 var response = await EAsistentService.SearchCommunicationContactsAsync(AuthState.AccessToken, query, _activeInstitutionId);
-                var users = ExtractArray(response, "data");
-                foreach (var user in users.EnumerateArray())
+                foreach (var user in ExtractDataItems(response))
                 {
                     var id = GetStr(user, "id", string.Empty);
                     if (string.IsNullOrWhiteSpace(id)) continue;
-                    var name = GetStr(user, "firstname", string.Empty);
-                    var lastName = GetStr(user, "lastname", string.Empty);
-                    var fullName = string.Join(" ", new[] { name, lastName }.Where(part => !string.IsNullOrWhiteSpace(part))).Trim();
-                    if (string.IsNullOrWhiteSpace(fullName))
-                    {
-                        fullName = GetStr(user, "name", "Prejemnik");
-                    }
+                    var fullName = GetUserName(user, GetStr(user, "name", "Prejemnik"));
                     var subtitle = GetStr(user, "title", GetStr(user, "email", string.Empty));
                     _contactResults.Add((id, fullName, subtitle, user));
                     ContactResultsList.Items.Add(BuildChannelItem(fullName, string.IsNullOrWhiteSpace(subtitle) ? $"ID: {id}" : subtitle));
@@ -317,7 +329,7 @@ namespace EAClient.Pages
                 await LoadInstitutionAsync();
                 var selected = _contactResults[ContactResultsList.SelectedIndex];
                 var title = string.IsNullOrWhiteSpace(NewMessageTitleInput.Text) ? selected.Name : NewMessageTitleInput.Text.Trim();
-                var created = await EAsistentService.CreateNewMessageChannelAsync(
+                await EAsistentService.CreateNewMessageChannelAsync(
                     AuthState.AccessToken,
                     title,
                     message,
@@ -326,20 +338,12 @@ namespace EAClient.Pages
 
                 NewMessageBodyInput.Text = string.Empty;
                 NewMessageTitleInput.Text = string.Empty;
+                NewMessageRecipientInput.Text = string.Empty;
                 NewMessageStatus.Text = "Novo sporočilo je bilo ustvarjeno.";
                 ContactResultsList.Items.Clear();
                 _contactResults.Clear();
+                ComposeOverlay.Visibility = Visibility.Collapsed;
                 await LoadChannelsAsync();
-
-                var newId = GetStr(created, "id", string.Empty);
-                if (!string.IsNullOrWhiteSpace(newId))
-                {
-                    var index = _channels.FindIndex(channel => channel.Id == newId);
-                    if (index >= 0)
-                    {
-                        ChannelsList.SelectedIndex = index;
-                    }
-                }
             }
             catch (Exception ex)
             {
@@ -361,6 +365,12 @@ namespace EAClient.Pages
             await LoadMessagesAsync(_selectedChannelId);
         }
 
+        private void ComposeFloatingButton_Click(object sender, RoutedEventArgs e)
+            => ComposeOverlay.Visibility = Visibility.Visible;
+
+        private void CloseComposeButton_Click(object sender, RoutedEventArgs e)
+            => ComposeOverlay.Visibility = Visibility.Collapsed;
+
         private void UpdateComposerState()
         {
             var enabled = !string.IsNullOrWhiteSpace(_selectedChannelId);
@@ -377,13 +387,14 @@ namespace EAClient.Pages
             RootGrid.Background = AppTheme.BgBrush;
             TitleBar.Background = AppTheme.TitleBarBrush;
             FontFamily = new FontFamily(AppTheme.FontFamily);
-            foreach (var card in new[] { ChannelsCard, MessagesCard, ComposerCard, NewMessageCard })
+            foreach (var card in new[] { ChannelsCard, MessagesCard, ComposerCard, ComposeOverlayCard })
             {
                 card.Background = AppTheme.CardBrush;
                 card.BorderBrush = AppTheme.BorderBrush;
                 card.BorderThickness = new Thickness(1);
                 card.CornerRadius = new CornerRadius(AppTheme.CardCornerRadius);
             }
+            ComposeOverlay.Background = new SolidColorBrush(Color.FromArgb(220, 255, 255, 255));
             ConversationMeta.Foreground = AppTheme.SubTextBrush;
             MessageInput.Background = AppTheme.BgBrush;
             MessageInput.Foreground = AppTheme.TextBrush;
@@ -394,32 +405,49 @@ namespace EAClient.Pages
                 textBox.Foreground = AppTheme.TextBrush;
                 textBox.BorderBrush = AppTheme.BorderBrush;
             }
-            foreach (var button in new[] { RefreshButton, SendButton, SearchRecipientsButton, SendNewMessageButton })
+            foreach (var button in new[] { RefreshButton, SendButton, SearchRecipientsButton, SendNewMessageButton, ComposeFloatingButton, CloseComposeButton })
             {
                 button.Background = AppTheme.AccentBrush;
                 button.Foreground = Brushes.White;
                 button.BorderThickness = new Thickness(0);
             }
+            ComposeFloatingButton.Width = 64;
+            ComposeFloatingButton.Height = 64;
             NewMessageStatus.Foreground = AppTheme.SubTextBrush;
         }
 
-        private static JsonElement ExtractArray(JsonElement root, params string[] keys)
+        private static IEnumerable<JsonElement> ExtractDataItems(JsonElement root)
         {
-            foreach (var key in keys)
+            if (root.ValueKind == JsonValueKind.Array)
             {
-                if (root.ValueKind != JsonValueKind.Object)
+                foreach (var item in root.EnumerateArray())
                 {
-                    return default;
-                }
-
-                if (root.TryGetProperty(key, out var value))
-                {
-                    if (value.ValueKind == JsonValueKind.Array) return value;
-                    root = value;
+                    if (item.ValueKind == JsonValueKind.Object && item.TryGetProperty("data", out var data))
+                    {
+                        if (data.ValueKind == JsonValueKind.Array)
+                        {
+                            foreach (var nested in data.EnumerateArray())
+                                yield return nested;
+                        }
+                        else
+                        {
+                            yield return data;
+                        }
+                    }
+                    else
+                    {
+                        yield return item;
+                    }
                 }
             }
-            return root.ValueKind == JsonValueKind.Array ? root : default;
+            else if (root.ValueKind == JsonValueKind.Object)
+            {
+                yield return root;
+            }
         }
+
+        private static JsonElement GetNested(JsonElement element, string property)
+            => element.ValueKind == JsonValueKind.Object && element.TryGetProperty(property, out var value) ? value : default;
 
         private static string GetStr(JsonElement element, string property, string fallback)
         {
@@ -430,26 +458,40 @@ namespace EAClient.Pages
             return fallback;
         }
 
-        private static string GetNestedStr(JsonElement element, string[] path, string fallback)
-        {
-            var current = element;
-            foreach (var key in path)
-            {
-                if (current.ValueKind != JsonValueKind.Object || !current.TryGetProperty(key, out current))
-                {
-                    return fallback;
-                }
-            }
-            return current.ValueKind == JsonValueKind.String ? current.GetString() ?? fallback : current.ToString();
-        }
+        private static int GetInt(JsonElement element, string property, int fallback)
+            => element.ValueKind == JsonValueKind.Object && element.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var parsed)
+                ? parsed
+                : fallback;
 
         private static bool GetBool(JsonElement element, string property)
         {
-            if (element.ValueKind == JsonValueKind.Object && element.TryGetProperty(property, out var value) && value.ValueKind is JsonValueKind.True or JsonValueKind.False)
+            if (element.ValueKind != JsonValueKind.Object || !element.TryGetProperty(property, out var value))
+                return false;
+
+            return value.ValueKind switch
             {
-                return value.GetBoolean();
-            }
-            return false;
+                JsonValueKind.True => true,
+                JsonValueKind.False => false,
+                JsonValueKind.Number => value.TryGetInt32(out var number) && number == 1,
+                JsonValueKind.String => bool.TryParse(value.GetString(), out var parsed) && parsed,
+                _ => false
+            };
+        }
+
+        private static string GetUserName(JsonElement user, string fallback)
+        {
+            var first = GetStr(user, "firstname", string.Empty);
+            var last = GetStr(user, "lastname", string.Empty);
+            var combined = string.Join(" ", new[] { first, last }.Where(x => !string.IsNullOrWhiteSpace(x))).Trim();
+            return string.IsNullOrWhiteSpace(combined) ? fallback : combined;
+        }
+
+        private static string StripHtml(string html)
+        {
+            if (string.IsNullOrWhiteSpace(html)) return string.Empty;
+            return System.Text.RegularExpressions.Regex.Replace(html, "<.*?>", string.Empty)
+                .Replace("&nbsp;", " ")
+                .Trim();
         }
     }
 }
