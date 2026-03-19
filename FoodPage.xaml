@@ -34,7 +34,7 @@
             </StackPanel>
 
             <ScrollViewer x:Name="ContentPanel" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" Padding="20">
-                <StackPanel x:Name="FoodContainer" MaxWidth="960" HorizontalAlignment="Center"/>
+                <StackPanel x:Name="FoodContainer" HorizontalAlignment="Stretch"/>
             </ScrollViewer>
         </Grid>
     </Grid>

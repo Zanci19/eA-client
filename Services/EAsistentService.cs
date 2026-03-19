@@ -12,20 +12,37 @@ namespace EAClient.Services
 {
     public static class EAsistentService
     {
-        private static readonly HttpClient _client = new HttpClient
-        {
-            BaseAddress = new Uri("https://www.easistent.com"),
-            Timeout = TimeSpan.FromSeconds(30)
-        };
+        private static readonly CookieContainer _cookies = new();
 
-        private static readonly HttpClient _communicationClient = new HttpClient
-        {
-            BaseAddress = new Uri("https://komunikacija.easistent.com"),
-            Timeout = TimeSpan.FromSeconds(30)
-        };
+        private static readonly HttpClient _client = CreateClient("https://www.easistent.com");
+        private static readonly HttpClient _communicationClient = CreateClient("https://komunikacija.easistent.com");
+        private static readonly HttpClient _redirectClient = CreateClient(allowAutoRedirect: false);
 
         private static string _communicationToken = string.Empty;
         private static readonly JsonSerializerOptions _jsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+
+        private static HttpClient CreateClient(string? baseAddress = null, bool allowAutoRedirect = true)
+        {
+            var handler = new HttpClientHandler
+            {
+                AllowAutoRedirect = allowAutoRedirect,
+                UseCookies = true,
+                CookieContainer = _cookies,
+                AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate | DecompressionMethods.Brotli
+            };
+
+            var client = new HttpClient(handler)
+            {
+                Timeout = TimeSpan.FromSeconds(30)
+            };
+
+            if (!string.IsNullOrWhiteSpace(baseAddress))
+            {
+                client.BaseAddress = new Uri(baseAddress);
+            }
+
+            return client;
+        }
 
         private static HttpRequestMessage CreateRequest(HttpMethod method, string url, string? token = null)
         {
@@ -35,14 +52,16 @@ namespace EAClient.Services
             return request;
         }
 
-        private static HttpRequestMessage CreateCommunicationRequest(HttpMethod method, string url, string? token = null, string contentType = "application/json")
+        private static HttpRequestMessage CreateCommunicationRequest(HttpMethod method, string url, string? token = null)
         {
-            var request = new HttpRequestMessage(method, WithMobileFlag(url));
-            ApplyCommonHeaders(request, string.IsNullOrWhiteSpace(token) ? _communicationToken : token);
-            request.Headers.TryAddWithoutValidation("Accept", "application/json");
-            if (!string.IsNullOrWhiteSpace(contentType))
+            var request = new HttpRequestMessage(method, url);
+            request.Headers.TryAddWithoutValidation("Accept", "application/json, text/plain, */*");
+            request.Headers.TryAddWithoutValidation("x-requested-with", "XMLHttpRequest");
+            request.Headers.TryAddWithoutValidation("x-school-name", "easistent");
+            var bearerToken = string.IsNullOrWhiteSpace(token) ? _communicationToken : token;
+            if (!string.IsNullOrWhiteSpace(bearerToken))
             {
-                request.Headers.TryAddWithoutValidation("Content-Type", contentType);
+                request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {bearerToken}");
             }
             return request;
         }
@@ -198,47 +217,64 @@ namespace EAClient.Services
 
         public static async Task<JsonElement> SelectMealMenuAsync(string token, string type, DateTime date, int menuId)
         {
-            var request = CreateRequest(HttpMethod.Post, "/m/meals/meal", token);
-            request.Content = new StringContent(JsonSerializer.Serialize(new
+            var payloads = new object[]
             {
-                type,
-                date = date.ToString("yyyy-MM-dd"),
-                menu = menuId
-            }), Encoding.UTF8, "application/json");
+                new { type, date = date.ToString("yyyy-MM-dd"), menu = menuId },
+                new { type, date = date.ToString("yyyy-MM-dd"), menu_id = menuId },
+                new { meal_type = type, date = date.ToString("yyyy-MM-dd"), menu = menuId }
+            };
 
-            var response = await _client.SendAsync(request);
-            var json = await response.Content.ReadAsStringAsync();
-            if (!response.IsSuccessStatusCode)
+            Exception? lastException = null;
+            foreach (var payload in payloads)
             {
-                throw new Exception($"Napaka pri prijavi na meni ({(int)response.StatusCode}): {TryGetErrorMessage(json)}");
+                var request = CreateRequest(HttpMethod.Post, "/m/meals/meal", token);
+                request.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+
+                var response = await _client.SendAsync(request);
+                var json = await response.Content.ReadAsStringAsync();
+                if (!response.IsSuccessStatusCode)
+                {
+                    lastException = new Exception($"Napaka pri prijavi na meni ({(int)response.StatusCode}): {TryGetErrorMessage(json)}");
+                    continue;
+                }
+
+                using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(json) ? "{}" : json);
+                return doc.RootElement.Clone();
             }
 
-            using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(json) ? "{}" : json);
-            return doc.RootElement.Clone();
+            throw lastException ?? new Exception("Napaka pri prijavi na meni.");
         }
 
         public static async Task<JsonElement> GetCommunicationNewsAsync(string token)
             => await SendCommunicationJsonAsync(CreateCommunicationRequest(HttpMethod.Get, "/api/me/news", token));
 
         public static async Task<JsonElement> GetCommunicationMeAsync(string token)
-            => await SendCommunicationJsonAsync(CreateCommunicationRequest(HttpMethod.Get, "/api/me", token));
+            => await SendCommunicationJsonAsync(CreateCommunicationRequest(HttpMethod.Get, "/api/me?institution_id=0", token));
+
+        public static async Task<JsonElement> GetCommunicationInstitutionsAsync(string token)
+            => await SendCommunicationJsonAsync(CreateCommunicationRequest(HttpMethod.Get, "/api/me/institutions", token));
 
         public static async Task<JsonElement> GetMessageChannelsAsync(string token, int limit = 20, string? to = null)
         {
             var extra = string.IsNullOrWhiteSpace(to) ? string.Empty : $"&to={Uri.EscapeDataString(to)}";
-            return await SendCommunicationJsonAsync(CreateCommunicationRequest(HttpMethod.Get, $"/api/channels?type=message&limit={limit}{extra}", token));
+            return await SendCommunicationJsonAsync(CreateCommunicationRequest(HttpMethod.Get, $"/api/channels?pinned=false&limit={limit}&type=message{extra}", token));
         }
 
         public static async Task<JsonElement> GetChannelDetailsAsync(string token, string channelId)
             => await SendCommunicationJsonAsync(CreateCommunicationRequest(HttpMethod.Get, $"/api/channels/{channelId}", token));
 
         public static async Task<JsonElement> GetChannelMessagesAsync(string token, string channelId, int limit = 25)
-            => await SendCommunicationJsonAsync(CreateCommunicationRequest(HttpMethod.Get, $"/api/channels/{channelId}/messages?with=files&limit={limit}", token));
+            => await SendCommunicationJsonAsync(CreateCommunicationRequest(HttpMethod.Get, $"/api/channels/{channelId}/messages?limit={limit}&with=files,user,labels", token));
 
         public static async Task<JsonElement> SendChannelMessageAsync(string token, string channelId, string message)
         {
             var request = CreateCommunicationRequest(HttpMethod.Post, $"/api/channels/{channelId}/messages", token);
-            request.Content = new StringContent(JsonSerializer.Serialize(new { message }, _jsonOptions), Encoding.UTF8, "application/json");
+            request.Content = new StringContent(JsonSerializer.Serialize(new
+            {
+                channel_id = channelId,
+                body = WrapHtml(message),
+                page_url = $"https://komunikacija.easistent.com/inbox/messages/{channelId}"
+            }, _jsonOptions), Encoding.UTF8, "application/json");
             return await SendCommunicationJsonAsync(request);
         }
 
@@ -256,10 +292,10 @@ namespace EAClient.Services
             {
                 type = "message",
                 title,
-                body,
+                body = WrapHtml(body),
+                institutionId,
                 participants = participantPayload,
-                blockedSelectedUsers = Array.Empty<object>(),
-                institutionId
+                blockedSelectedUsers = Array.Empty<object>()
             }, _jsonOptions), Encoding.UTF8, "application/json");
             return await SendCommunicationJsonAsync(request);
         }
@@ -294,14 +330,6 @@ namespace EAClient.Services
                     if (!string.IsNullOrWhiteSpace(freshAccessToken))
                     {
                         AuthState.AccessToken = freshAccessToken;
-                        using var refreshedRequest = CloneRequest(request, freshAccessToken);
-                        response = await _communicationClient.SendAsync(refreshedRequest);
-                        UpdateCommunicationToken(response);
-                        json = await response.Content.ReadAsStringAsync();
-                        if (response.IsSuccessStatusCode)
-                        {
-                            return (response, json);
-                        }
                     }
                 }
                 catch
@@ -309,10 +337,17 @@ namespace EAClient.Services
                 }
             }
 
-            if (!string.IsNullOrWhiteSpace(AuthState.AccessToken) && request.Headers.Authorization == null)
+            await EnsureCommunicationSessionAsync(AuthState.AccessToken);
+
+            using var retryRequest = CloneRequest(request, null);
+            response = await _communicationClient.SendAsync(retryRequest);
+            UpdateCommunicationToken(response);
+            json = await response.Content.ReadAsStringAsync();
+
+            if (!response.IsSuccessStatusCode && !string.IsNullOrWhiteSpace(AuthState.AccessToken))
             {
-                using var retryRequest = CloneRequest(request, AuthState.AccessToken);
-                response = await _communicationClient.SendAsync(retryRequest);
+                using var fallbackRequest = CloneRequest(request, AuthState.AccessToken);
+                response = await _communicationClient.SendAsync(fallbackRequest);
                 UpdateCommunicationToken(response);
                 json = await response.Content.ReadAsStringAsync();
             }
@@ -320,9 +355,74 @@ namespace EAClient.Services
             return (response, json);
         }
 
-        private static HttpRequestMessage CloneRequest(HttpRequestMessage source, string token)
+        private static async Task EnsureCommunicationSessionAsync(string token)
         {
-            var request = CreateCommunicationRequest(source.Method, source.RequestUri?.PathAndQuery ?? string.Empty, token);
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                return;
+            }
+
+            try
+            {
+                using var bootstrapRequest = CreateCommunicationRequest(HttpMethod.Get, "/api/me?institution_id=0", token);
+                var bootstrapResponse = await _communicationClient.SendAsync(bootstrapRequest);
+                UpdateCommunicationToken(bootstrapResponse);
+                if (bootstrapResponse.IsSuccessStatusCode || !string.IsNullOrWhiteSpace(_communicationToken))
+                {
+                    return;
+                }
+            }
+            catch
+            {
+            }
+
+            var currentUri = new Uri("https://moj.easistent.com/api/external_service?redirect_to=chat");
+
+            for (var i = 0; i < 8; i++)
+            {
+                using var request = new HttpRequestMessage(HttpMethod.Get, currentUri);
+                if (currentUri.Host.Contains("easistent.com", StringComparison.OrdinalIgnoreCase)
+                    && !currentUri.Host.StartsWith("komunikacija", StringComparison.OrdinalIgnoreCase))
+                {
+                    ApplyCommonHeaders(request, token);
+                }
+                request.Headers.TryAddWithoutValidation("Accept", "application/json, text/plain, */*");
+
+                using var response = await _redirectClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+                UpdateCommunicationToken(response);
+
+                if (IsRedirect(response.StatusCode) && response.Headers.Location != null)
+                {
+                    currentUri = response.Headers.Location.IsAbsoluteUri
+                        ? response.Headers.Location
+                        : new Uri(currentUri, response.Headers.Location);
+                    continue;
+                }
+
+                break;
+            }
+
+            using var meRequest = CreateCommunicationRequest(HttpMethod.Get, "/api/me?institution_id=0", token);
+            using var meResponse = await _communicationClient.SendAsync(meRequest);
+            UpdateCommunicationToken(meResponse);
+        }
+
+        private static bool IsRedirect(HttpStatusCode statusCode)
+            => (int)statusCode >= 300 && (int)statusCode < 400;
+
+        private static HttpRequestMessage CloneRequest(HttpRequestMessage source, string? token)
+        {
+            var request = CreateCommunicationRequest(source.Method, source.RequestUri?.ToString() ?? string.Empty, token);
+            foreach (var header in source.Headers)
+            {
+                if (header.Key.Equals("Authorization", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+                request.Headers.Remove(header.Key);
+                request.Headers.TryAddWithoutValidation(header.Key, header.Value);
+            }
+
             if (source.Content != null)
             {
                 var body = source.Content.ReadAsStringAsync().GetAwaiter().GetResult();
@@ -350,6 +450,9 @@ namespace EAClient.Services
         public static Task<JsonElement> GetChildInfoAsync(string token)
             => GetJsonWithRefreshAsync(token, "/m/me/child");
 
+        private static string WrapHtml(string text)
+            => $"<p>{WebUtility.HtmlEncode(text).Replace("\n", "<br />")}</p>";
+
         private static string TryGetErrorMessage(string json)
         {
             try
@@ -362,6 +465,14 @@ namespace EAClient.Services
                 if (doc.RootElement.TryGetProperty("error", out var err))
                 {
                     return err.GetString() ?? json;
+                }
+                if (doc.RootElement.ValueKind == JsonValueKind.Array)
+                {
+                    var first = doc.RootElement.EnumerateArray().FirstOrDefault();
+                    if (first.ValueKind == JsonValueKind.Object && first.TryGetProperty("message", out var nestedMsg))
+                    {
+                        return nestedMsg.GetString() ?? json;
+                    }
                 }
             }
             catch

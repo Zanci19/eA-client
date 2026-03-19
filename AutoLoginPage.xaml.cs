@@ -44,15 +44,54 @@ namespace EAClient.Pages
                     ? "Osveževanje seje..."
                     : $"Samodejna prijava za {saved.Username}...";
 
-                var newToken = await EAsistentService.RefreshTokenAsync(saved.RefreshToken);
-                AuthState.AccessToken = newToken;
-                AuthState.RefreshToken = saved.RefreshToken;
+                var loggedIn = false;
 
-                CredentialService.Save(saved.Username, saved.RefreshToken, saved.UserId);
+                if (!string.IsNullOrWhiteSpace(saved.RefreshToken))
+                {
+                    try
+                    {
+                        var newToken = await EAsistentService.RefreshTokenAsync(saved.RefreshToken);
+                        AuthState.AccessToken = newToken;
+                        AuthState.RefreshToken = saved.RefreshToken;
+                        loggedIn = !string.IsNullOrWhiteSpace(newToken);
+                    }
+                    catch
+                    {
+                        loggedIn = false;
+                    }
+                }
+
+                if (!loggedIn && !string.IsNullOrWhiteSpace(saved.Username) && !string.IsNullOrWhiteSpace(saved.Password))
+                {
+                    StatusText.Text = $"Ponovna prijava za {saved.Username}...";
+                    var result = await EAsistentService.LoginAsync(saved.Username, saved.Password);
+                    AuthState.AccessToken = result.AccessToken.Token;
+                    AuthState.RefreshToken = result.RefreshToken;
+                    AuthState.TokenExpiration = result.AccessToken.ExpirationDate;
+                    AuthState.UserId = result.User.Id;
+                    AuthState.UserType = result.User.Type;
+                    AuthState.DisplayName = result.User.Name;
+                    loggedIn = true;
+                    saved = new SavedSession
+                    {
+                        Username = saved.Username,
+                        Password = saved.Password,
+                        RefreshToken = result.RefreshToken,
+                        UserId = result.User.Id,
+                        SavedAtUtc = saved.SavedAtUtc
+                    };
+                }
+
+                if (!loggedIn)
+                {
+                    throw new System.Exception("Samodejna prijava ni uspela.");
+                }
+
+                CredentialService.Save(saved.Username, saved.Password, AuthState.RefreshToken, AuthState.UserId);
 
                 try
                 {
-                    var childInfo = await EAsistentService.GetChildInfoAsync(newToken);
+                    var childInfo = await EAsistentService.GetChildInfoAsync(AuthState.AccessToken);
                     if (childInfo.TryGetProperty("display_name", out var dn)) AuthState.DisplayName = dn.GetString() ?? string.Empty;
                     if (childInfo.TryGetProperty("short_name", out var sn)) AuthState.ShortName = sn.GetString() ?? string.Empty;
                     if (childInfo.TryGetProperty("plus_enabled", out var pe)) AuthState.PlusEnabled = pe.GetBoolean();
@@ -62,7 +101,7 @@ namespace EAClient.Pages
                 }
                 catch
                 {
-                    AuthState.UserType = "child";
+                    AuthState.UserType = string.IsNullOrWhiteSpace(AuthState.UserType) ? "child" : AuthState.UserType;
                 }
 
                 AnimationHelper.NavigateWithTransition(_frame, new DashboardPage());
