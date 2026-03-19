@@ -27,8 +27,9 @@ namespace EAClient.Pages
 
         private void NavHome_Click(object sender, RoutedEventArgs e) => NavigateTo(new OverviewPage());
         private void NavTimetable_Click(object sender, RoutedEventArgs e) => NavigateTo(new TimetablePage());
-        private void NavGrades_Click(object sender, RoutedEventArgs e) => NavigateTo(new GradesPage());
         private void NavFood_Click(object sender, RoutedEventArgs e) => NavigateTo(new FoodPage());
+        private void NavCommunication_Click(object sender, RoutedEventArgs e) => NavigateTo(new CommunicationPage());
+        private void NavGrades_Click(object sender, RoutedEventArgs e) => NavigateTo(new GradesPage());
         private void NavHomework_Click(object sender, RoutedEventArgs e) => NavigateTo(new HomeworkPage());
         private void NavAbsences_Click(object sender, RoutedEventArgs e) => NavigateTo(new AbsencesPage());
         private void NavEval_Click(object sender, RoutedEventArgs e) => NavigateTo(new EvaluationsPage());
@@ -64,6 +65,8 @@ namespace EAClient.Pages
             SidebarHeader.Background = AppTheme.SidebarHeaderBrush;
             ContentFrame.Background = AppTheme.BgBrush;
             FontFamily = new FontFamily(AppTheme.FontFamily);
+            AnimationHelper.FadeIn(Sidebar, 220);
+            AnimationHelper.FadeIn(ContentFrame, 260);
         }
     }
 }

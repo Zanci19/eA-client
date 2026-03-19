@@ -50,8 +50,9 @@
                 <StackPanel x:Name="NavStack" Margin="8,14,8,0">
                     <Button x:Name="NavHome" Content="🏠  Domov" Style="{StaticResource NavBtnStyle}" Click="NavHome_Click"/>
                     <Button x:Name="NavTimetable" Content="📅  Urnik" Style="{StaticResource NavBtnStyle}" Click="NavTimetable_Click"/>
-                    <Button x:Name="NavGrades" Content="📝  Ocene" Style="{StaticResource NavBtnStyle}" Click="NavGrades_Click"/>
                     <Button x:Name="NavFood" Content="🍽  Prehrana" Style="{StaticResource NavBtnStyle}" Click="NavFood_Click"/>
+                    <Button x:Name="NavCommunication" Content="💬  Komunikacija" Style="{StaticResource NavBtnStyle}" Click="NavCommunication_Click"/>
+                    <Button x:Name="NavGrades" Content="📝  Ocene" Style="{StaticResource NavBtnStyle}" Click="NavGrades_Click"/>
                     <Button x:Name="NavHomework" Content="📚  Domače naloge" Style="{StaticResource NavBtnStyle}" Click="NavHomework_Click"/>
                     <Button x:Name="NavAbsences" Content="❌  Izostanki" Style="{StaticResource NavBtnStyle}" Click="NavAbsences_Click"/>
                     <Button x:Name="NavEval" Content="📋  Ocenjevanja" Style="{StaticResource NavBtnStyle}" Click="NavEval_Click"/>

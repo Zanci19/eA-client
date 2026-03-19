@@ -21,11 +21,14 @@ namespace EAClient.Pages
         };
 
         private DateTime _currentMonday;
+        private DateTime _selectedDate;
+        private List<JsonElement> _dayEntries = new();
 
         public FoodPage()
         {
             InitializeComponent();
             _currentMonday = GetMonday(DateTime.Today);
+            _selectedDate = DateTime.Today;
             Loaded += FoodPage_Loaded;
         }
 
@@ -35,17 +38,26 @@ namespace EAClient.Pages
             return date.AddDays(dow == 0 ? -6 : -(dow - 1));
         }
 
-        private async void FoodPage_Loaded(object sender, RoutedEventArgs e) => await LoadWeekAsync();
+        private async void FoodPage_Loaded(object sender, RoutedEventArgs e)
+        {
+            ApplyTheme();
+            await LoadWeekAsync();
+        }
 
         private async Task LoadWeekAsync()
         {
-            UpdateWeekLabel();
+            UpdateHeader();
             ShowLoading();
             try
             {
                 var to = _currentMonday.AddDays(4);
                 var json = await EAsistentService.GetSchoolCateringAsync(AuthState.AccessToken, _currentMonday, to);
-                PopulateFood(json);
+                _dayEntries = ExtractDayEntries(json).ToList();
+                if (_selectedDate < _currentMonday || _selectedDate > to)
+                {
+                    _selectedDate = _currentMonday;
+                }
+                PopulateSelectedDay();
                 ShowContent();
             }
             catch (Exception ex)
@@ -54,129 +66,98 @@ namespace EAClient.Pages
             }
         }
 
-        private void UpdateWeekLabel()
+        private void UpdateHeader()
         {
-            var to = _currentMonday.AddDays(4);
-            WeekLabel.Text = $"{_currentMonday:dd.MM.yyyy}  –  {to:dd.MM.yyyy}";
+            WeekLabel.Text = $"{_selectedDate:dddd, dd.MM.yyyy}";
+            PrevDayButton.Content = _selectedDate <= _currentMonday ? "◀  Prejšnji teden" : "◀  Prejšnji dan";
+            NextDayButton.Content = _selectedDate >= _currentMonday.AddDays(4) ? "Naslednji teden  ▶" : "Naslednji dan  ▶";
         }
 
-        private void PopulateFood(JsonElement json)
+        private void PopulateSelectedDay()
         {
+            UpdateHeader();
             FoodContainer.Children.Clear();
 
-            var dayEntries = ExtractDayEntries(json).ToList();
-            if (dayEntries.Count == 0)
+            var match = _dayEntries.FirstOrDefault(day => DateMatches(day, _selectedDate));
+            if (match.ValueKind == JsonValueKind.Undefined)
             {
-                FoodContainer.Children.Add(new TextBlock
-                {
-                    Text = "Ni podatkov o prehrani za ta teden.",
-                    Foreground = Brushes.Gray,
-                    FontSize = 14,
-                    Margin = new Thickness(4)
-                });
+                FoodContainer.Children.Add(BuildEmptyCard());
                 return;
             }
 
-            foreach (var day in dayEntries)
-            {
-                FoodContainer.Children.Add(BuildDayCard(day));
-            }
+            var card = BuildDayCard(match);
+            FoodContainer.Children.Add(card);
+            AnimationHelper.FadeInFromBelow(card, 260);
         }
 
         private IEnumerable<JsonElement> ExtractDayEntries(JsonElement json)
         {
             if (json.TryGetProperty("items", out var items) && items.ValueKind == JsonValueKind.Array)
-            {
                 return items.EnumerateArray();
-            }
-
             if (json.TryGetProperty("days", out var days) && days.ValueKind == JsonValueKind.Array)
-            {
                 return days.EnumerateArray();
-            }
-
             if (json.TryGetProperty("school_catering", out var schoolCatering) && schoolCatering.ValueKind == JsonValueKind.Array)
-            {
                 return schoolCatering.EnumerateArray();
-            }
+            return json.ValueKind == JsonValueKind.Array ? json.EnumerateArray() : Enumerable.Empty<JsonElement>();
+        }
 
-            return json.ValueKind == JsonValueKind.Array
-                ? json.EnumerateArray()
-                : Enumerable.Empty<JsonElement>();
+        private bool DateMatches(JsonElement day, DateTime date)
+            => DateTime.TryParse(GetStr(day, "date", string.Empty), out var parsed) && parsed.Date == date.Date;
+
+        private Border BuildEmptyCard()
+        {
+            var card = CreateCard();
+            card.Child = new TextBlock
+            {
+                Text = "Za izbrani dan ni objavljenega menija.",
+                Foreground = AppTheme.SubTextBrush,
+                FontSize = 14
+            };
+            return card;
         }
 
         private Border BuildDayCard(JsonElement day)
         {
-            var dateStr = GetStr(day, "date", string.Empty);
-            DateTime.TryParse(dateStr, out var dateObj);
-
-            var card = new Border
-            {
-                Background = Brushes.White,
-                BorderBrush = new SolidColorBrush(Color.FromRgb(228, 232, 240)),
-                BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(8),
-                Padding = new Thickness(16),
-                Margin = new Thickness(0, 0, 0, 12)
-            };
-
+            var card = CreateCard();
             var stack = new StackPanel();
-            var headerRow = new DockPanel { Margin = new Thickness(0, 0, 0, 10) };
-            string[] sloDayNames = { "Nedelja", "Ponedeljek", "Torek", "Sreda", "Četrtek", "Petek", "Sobota" };
-            var dayName = dateObj != default ? sloDayNames[(int)dateObj.DayOfWeek] : string.Empty;
-            var isToday = dateObj.Date == DateTime.Today;
+            var dateObj = DateTime.TryParse(GetStr(day, "date", string.Empty), out var parsed) ? parsed : _selectedDate;
 
-            headerRow.Children.Add(new TextBlock
+            stack.Children.Add(new TextBlock
             {
-                Text = $"{dayName}, {dateStr}",
-                FontSize = 14,
+                Text = dateObj.ToString("dddd, dd.MM.yyyy"),
+                FontSize = 24,
                 FontWeight = FontWeights.Bold,
-                Foreground = isToday
-                    ? new SolidColorBrush(Color.FromRgb(0, 102, 204))
-                    : new SolidColorBrush(Color.FromRgb(28, 35, 51))
+                Foreground = AppTheme.TextBrush,
+                Margin = new Thickness(0, 0, 0, 4)
+            });
+            stack.Children.Add(new TextBlock
+            {
+                Text = "Vsak zaslon pokaže en dan, menije pa lahko tudi prijaviš neposredno iz aplikacije.",
+                FontSize = 13,
+                Foreground = AppTheme.SubTextBrush,
+                Margin = new Thickness(0, 0, 0, 18)
             });
 
-            if (isToday)
+            var rendered = AddMealSections(stack, day, dateObj);
+            if (!rendered)
             {
-                headerRow.Children.Add(new Border
-                {
-                    Background = new SolidColorBrush(Color.FromRgb(0, 102, 204)),
-                    CornerRadius = new CornerRadius(10),
-                    Padding = new Thickness(8, 3, 8, 3),
-                    Margin = new Thickness(10, 0, 0, 0),
-                    VerticalAlignment = VerticalAlignment.Center,
-                    Child = new TextBlock { Text = "Danes", Foreground = Brushes.White, FontSize = 11 }
-                });
-            }
-
-            stack.Children.Add(headerRow);
-            stack.Children.Add(new Border
-            {
-                Height = 1,
-                Background = new SolidColorBrush(Color.FromRgb(228, 232, 240)),
-                Margin = new Thickness(0, 0, 0, 10)
-            });
-
-            var renderedSections = AddMealSections(stack, day);
-            if (!renderedSections)
-            {
-                stack.Children.Add(new TextBlock { Text = "Ni menija.", Foreground = Brushes.Gray, FontSize = 13 });
+                stack.Children.Add(new TextBlock { Text = "Ni menija.", Foreground = AppTheme.SubTextBrush, FontSize = 13 });
             }
 
             card.Child = stack;
             return card;
         }
 
-        private bool AddMealSections(Panel container, JsonElement day)
+        private bool AddMealSections(Panel container, JsonElement day, DateTime date)
         {
             if (!day.TryGetProperty("menus", out var menus))
             {
-                return AddLegacyMenus(container, day);
+                return AddFlatMenus(container, FindMenus(day), string.Empty, date);
             }
 
             if (menus.ValueKind == JsonValueKind.Array)
             {
-                return AddFlatMenus(container, menus);
+                return AddFlatMenus(container, menus, string.Empty, date);
             }
 
             if (menus.ValueKind != JsonValueKind.Object)
@@ -188,143 +169,182 @@ namespace EAClient.Pages
             foreach (var mealType in MealTypeLabels)
             {
                 if (!menus.TryGetProperty(mealType.Key, out var entries) || entries.ValueKind != JsonValueKind.Array || entries.GetArrayLength() == 0)
-                {
                     continue;
-                }
 
                 rendered = true;
-                container.Children.Add(new TextBlock
-                {
-                    Text = mealType.Value,
-                    FontSize = 13,
-                    FontWeight = FontWeights.SemiBold,
-                    Foreground = new SolidColorBrush(Color.FromRgb(0, 102, 204)),
-                    Margin = new Thickness(0, 6, 0, 6)
-                });
-
-                foreach (var menu in entries.EnumerateArray())
-                {
-                    container.Children.Add(BuildMenuRow(menu));
-                }
+                container.Children.Add(BuildSectionHeader(mealType.Value));
+                rendered |= AddFlatMenus(container, entries, mealType.Key, date);
             }
 
             return rendered;
         }
 
-        private bool AddLegacyMenus(Panel container, JsonElement day)
+        private JsonElement FindMenus(JsonElement day)
         {
             if (day.TryGetProperty("items", out var items) && items.ValueKind == JsonValueKind.Array)
-            {
-                return AddFlatMenus(container, items);
-            }
-
-            return false;
+                return items;
+            if (day.TryGetProperty("menus", out var menus) && menus.ValueKind == JsonValueKind.Array)
+                return menus;
+            return default;
         }
 
-        private bool AddFlatMenus(Panel container, JsonElement menus)
+        private bool AddFlatMenus(Panel container, JsonElement menus, string typeOverride, DateTime date)
         {
+            if (menus.ValueKind != JsonValueKind.Array)
+                return false;
+
             var rendered = false;
             foreach (var menu in menus.EnumerateArray())
             {
-                container.Children.Add(BuildMenuRow(menu));
+                container.Children.Add(BuildMenuRow(menu, typeOverride, date));
                 rendered = true;
             }
 
             return rendered;
         }
 
-        private UIElement BuildMenuRow(JsonElement menu)
+        private UIElement BuildSectionHeader(string text)
         {
+            return new Border
+            {
+                Background = AppTheme.IsSleek ? new SolidColorBrush(Color.FromArgb(30, 0, 102, 204)) : Brushes.Transparent,
+                CornerRadius = new CornerRadius(AppTheme.ButtonCornerRadius),
+                Padding = new Thickness(12, 8, 12, 8),
+                Margin = new Thickness(0, 0, 0, 10),
+                Child = new TextBlock
+                {
+                    Text = text,
+                    FontSize = 14,
+                    FontWeight = FontWeights.SemiBold,
+                    Foreground = AppTheme.AccentBrush
+                }
+            };
+        }
+
+        private UIElement BuildMenuRow(JsonElement menu, string typeOverride, DateTime date)
+        {
+            var type = string.IsNullOrWhiteSpace(typeOverride) ? GetStr(menu, "type", "snack") : typeOverride;
+            var menuId = GetInt(menu, "menu", GetInt(menu, "id", 0));
+            var name = GetStr(menu, "name", GetStr(menu, "title", "Meni"));
+            var price = GetStr(menu, "price", string.Empty);
+            var description = NormalizeDescription(GetStr(menu, "description", GetStr(menu, "meal", string.Empty)));
+            var selected = GetBool(menu, "selected") || GetBool(menu, "is_primary") || GetBool(menu, "chosen");
+
             var row = new Border
             {
-                Background = new SolidColorBrush(Color.FromRgb(248, 250, 253)),
-                CornerRadius = new CornerRadius(6),
-                Padding = new Thickness(10),
-                Margin = new Thickness(0, 0, 0, 8)
+                Background = AppTheme.IsSleek ? new SolidColorBrush(Color.FromArgb(32, 0, 102, 204)) : new SolidColorBrush(Color.FromRgb(248, 250, 253)),
+                CornerRadius = new CornerRadius(AppTheme.CardCornerRadius),
+                Padding = new Thickness(14),
+                Margin = new Thickness(0, 0, 0, 12),
+                BorderBrush = selected ? AppTheme.AccentBrush : AppTheme.BorderBrush,
+                BorderThickness = new Thickness(selected ? 1.5 : 1)
             };
 
             var stack = new StackPanel();
-            var titleRow = new DockPanel();
-            var name = GetStr(menu, "name", GetStr(menu, "title", "Meni"));
-            var price = GetStr(menu, "price", string.Empty);
-            var isPrimary = GetBool(menu, "is_primary");
-
-            var nameBlock = new TextBlock
+            var top = new DockPanel();
+            var chooseButton = new Button
             {
-                Text = name,
-                FontSize = 13,
-                FontWeight = FontWeights.SemiBold,
-                Foreground = new SolidColorBrush(Color.FromRgb(28, 35, 51)),
-                TextWrapping = TextWrapping.Wrap
+                Content = selected ? "Prijavljen" : "Prijavi meni",
+                Padding = new Thickness(14, 8, 14, 8),
+                Background = selected ? AppTheme.AccentBrush : AppTheme.CardBrush,
+                Foreground = selected ? Brushes.White : AppTheme.TextBrush,
+                BorderBrush = AppTheme.BorderBrush,
+                BorderThickness = new Thickness(1),
+                Cursor = System.Windows.Input.Cursors.Hand,
+                IsEnabled = menuId > 0 && !selected,
+                Tag = (type, date, menuId)
             };
-            titleRow.Children.Add(nameBlock);
+            chooseButton.Click += ChooseMenu_Click;
+            DockPanel.SetDock(chooseButton, Dock.Right);
+            top.Children.Add(chooseButton);
+            top.Children.Add(new TextBlock { Text = name, FontSize = 15, FontWeight = FontWeights.SemiBold, Foreground = AppTheme.TextBrush, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0,0,12,0) });
+            stack.Children.Add(top);
 
-            if (!string.IsNullOrWhiteSpace(price))
+            var meta = new string[]
             {
-                var priceText = new TextBlock
-                {
-                    Text = $"{price} €",
-                    FontSize = 13,
-                    FontWeight = FontWeights.Bold,
-                    Foreground = new SolidColorBrush(Color.FromRgb(0, 102, 204)),
-                    HorizontalAlignment = HorizontalAlignment.Right,
-                    VerticalAlignment = VerticalAlignment.Center
-                };
-                DockPanel.SetDock(priceText, Dock.Right);
-                titleRow.Children.Insert(0, priceText);
-            }
+                MealTypeLabels.TryGetValue(type, out var label) ? label : type,
+                string.IsNullOrWhiteSpace(price) ? string.Empty : $"{price} €",
+                menuId > 0 ? $"ID menija: {menuId}" : string.Empty
+            }.Where(x => !string.IsNullOrWhiteSpace(x));
+            stack.Children.Add(new TextBlock { Text = string.Join("  •  ", meta), FontSize = 12, Foreground = AppTheme.SubTextBrush, Margin = new Thickness(0, 6, 0, 0) });
 
-            stack.Children.Add(titleRow);
-
-            if (isPrimary)
-            {
-                stack.Children.Add(new TextBlock
-                {
-                    Text = "Privzeti izbor",
-                    FontSize = 11,
-                    Foreground = new SolidColorBrush(Color.FromRgb(0, 102, 204)),
-                    Margin = new Thickness(0, 4, 0, 0)
-                });
-            }
-
-            var description = NormalizeDescription(GetStr(menu, "description", string.Empty));
             if (!string.IsNullOrWhiteSpace(description))
             {
-                stack.Children.Add(new TextBlock
-                {
-                    Text = description,
-                    FontSize = 12,
-                    Foreground = Brushes.DimGray,
-                    Margin = new Thickness(0, 6, 0, 0),
-                    TextWrapping = TextWrapping.Wrap
-                });
+                stack.Children.Add(new TextBlock { Text = description, FontSize = 13, Foreground = AppTheme.SubTextBrush, Margin = new Thickness(0, 8, 0, 0), TextWrapping = TextWrapping.Wrap });
             }
 
             row.Child = stack;
+            AnimationHelper.FadeInFromBelow(row, 240);
             return row;
         }
 
-        private static string NormalizeDescription(string text)
+        private async void ChooseMenu_Click(object sender, RoutedEventArgs e)
         {
-            return text
-                .Replace("\r", string.Empty)
-                .Replace("\n", Environment.NewLine)
-                .Trim();
+            if (sender is not Button button || button.Tag is not ValueTuple<string, DateTime, int> data)
+                return;
+
+            var original = button.Content;
+            button.IsEnabled = false;
+            button.Content = "Pošiljanje...";
+            try
+            {
+                await EAsistentService.SelectMealMenuAsync(AuthState.AccessToken, data.Item1, data.Item2, data.Item3);
+                button.Content = "Prijavljen";
+                await LoadWeekAsync();
+            }
+            catch (Exception ex)
+            {
+                button.Content = original;
+                button.IsEnabled = true;
+                MessageBox.Show($"Prijava na meni ni uspela.\n{ex.Message}", "Prehrana", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
         }
+
+        private static string NormalizeDescription(string text)
+            => text.Replace("\r", string.Empty).Replace("\n", Environment.NewLine).Trim();
 
         private static string GetStr(JsonElement el, string prop, string fallback)
         {
-            if (el.TryGetProperty(prop, out var v) && v.ValueKind == JsonValueKind.String)
+            if (el.TryGetProperty(prop, out var v))
             {
-                return v.GetString() ?? fallback;
+                if (v.ValueKind == JsonValueKind.String) return v.GetString() ?? fallback;
+                if (v.ValueKind == JsonValueKind.Number) return v.GetRawText();
             }
-
             return fallback;
         }
 
+        private static int GetInt(JsonElement el, string prop, int fallback)
+            => el.TryGetProperty(prop, out var v) && v.ValueKind == JsonValueKind.Number && v.TryGetInt32(out var number) ? number : fallback;
+
         private static bool GetBool(JsonElement el, string prop)
+            => el.TryGetProperty(prop, out var v) && (v.ValueKind == JsonValueKind.True || (v.ValueKind == JsonValueKind.Number && v.GetInt32() == 1));
+
+        private Border CreateCard()
+            => new()
+            {
+                Background = AppTheme.CardBrush,
+                BorderBrush = AppTheme.BorderBrush,
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(AppTheme.CardCornerRadius),
+                Padding = new Thickness(22)
+            };
+
+        private void ApplyTheme()
         {
-            return el.TryGetProperty(prop, out var v) && v.ValueKind == JsonValueKind.True;
+            RootGrid.Background = AppTheme.BgBrush;
+            TitleBar.Background = AppTheme.TitleBarBrush;
+            NavBar.Background = AppTheme.CardBrush;
+            NavBar.BorderBrush = AppTheme.BorderBrush;
+            WeekLabel.Foreground = AppTheme.TextBrush;
+            LoadingText.Foreground = AppTheme.SubTextBrush;
+            FontFamily = new FontFamily(AppTheme.FontFamily);
+
+            foreach (var button in new[] { PrevDayButton, NextDayButton, RetryButton })
+            {
+                button.Background = button == RetryButton ? AppTheme.AccentBrush : (AppTheme.IsSleek ? new SolidColorBrush(Color.FromArgb(32, 0, 102, 204)) : new SolidColorBrush(Color.FromRgb(232, 240, 254)));
+                button.Foreground = button == RetryButton ? Brushes.White : AppTheme.AccentBrush;
+                button.BorderThickness = new Thickness(0);
+            }
         }
 
         private void ShowLoading()
@@ -349,16 +369,30 @@ namespace EAClient.Pages
             ErrorText.Text = msg;
         }
 
-        private async void PrevWeek_Click(object sender, RoutedEventArgs e)
+        private async void PrevDay_Click(object sender, RoutedEventArgs e)
         {
-            _currentMonday = _currentMonday.AddDays(-7);
-            await LoadWeekAsync();
+            if (_selectedDate <= _currentMonday)
+            {
+                _currentMonday = _currentMonday.AddDays(-7);
+                _selectedDate = _currentMonday.AddDays(4);
+                await LoadWeekAsync();
+                return;
+            }
+            _selectedDate = _selectedDate.AddDays(-1);
+            PopulateSelectedDay();
         }
 
-        private async void NextWeek_Click(object sender, RoutedEventArgs e)
+        private async void NextDay_Click(object sender, RoutedEventArgs e)
         {
-            _currentMonday = _currentMonday.AddDays(7);
-            await LoadWeekAsync();
+            if (_selectedDate >= _currentMonday.AddDays(4))
+            {
+                _currentMonday = _currentMonday.AddDays(7);
+                _selectedDate = _currentMonday;
+                await LoadWeekAsync();
+                return;
+            }
+            _selectedDate = _selectedDate.AddDays(1);
+            PopulateSelectedDay();
         }
 
         private async void Retry_Click(object sender, RoutedEventArgs e) => await LoadWeekAsync();
