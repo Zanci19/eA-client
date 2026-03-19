@@ -1,7 +1,6 @@
-<Page x:Class="EAClient.Pages.SetupWizardPage"
+﻿<Page x:Class="EAClient.Pages.SetupWizardPage"
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-      FontFamily="Arial">
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <Page.Resources>
         <Style x:Key="ChoiceBtn" TargetType="Button">
@@ -18,13 +17,14 @@
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="12"
+                                CornerRadius="16"
                                 Padding="{TemplateBinding Padding}">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="bg" Property="BorderBrush" Value="#0066CC"/>
+                                <Setter TargetName="bg" Property="Background" Value="#F3F8FF"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -33,140 +33,98 @@
         </Style>
     </Page.Resources>
 
-    <Grid>
+    <Grid x:Name="RootGrid" Background="#F5F7FA">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- Header -->
-        <Border Grid.Row="0" Background="#0066CC" Padding="32,24">
+        <Border Grid.Row="0" x:Name="TitleBar" Background="#0066CC" Padding="32,24">
             <StackPanel>
                 <TextBlock Text="eAsistent" FontSize="32" FontWeight="Bold"
                            Foreground="White" HorizontalAlignment="Center"/>
                 <TextBlock x:Name="StepLabel" Text="Korak 1 od 3"
-                           FontSize="13" Foreground="#AACCFF"
+                           FontSize="13" Foreground="#D8E8FF"
                            HorizontalAlignment="Center" Margin="0,6,0,0"/>
             </StackPanel>
         </Border>
 
-        <!-- Step content -->
-        <Grid Grid.Row="1">
-
-            <!-- Step 1: Theme -->
-            <StackPanel x:Name="Step1" VerticalAlignment="Center" HorizontalAlignment="Center"
-                        MaxWidth="600">
-                <TextBlock Text="Kakšen slog aplikacije želite?" FontSize="22" FontWeight="Bold"
+        <Grid Grid.Row="1" x:Name="ContentHost" Margin="20">
+            <StackPanel x:Name="Step1" VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="720">
+                <TextBlock Text="Kakšen občutek naj ima aplikacija?" FontSize="24" FontWeight="Bold"
                            Foreground="#1C2333" HorizontalAlignment="Center" Margin="0,0,0,8"/>
-                <TextBlock Text="Izberete lahko formalni ali sodobni (sleek) videz." FontSize="14"
-                           Foreground="#666" HorizontalAlignment="Center" Margin="0,0,0,32"/>
+                <TextBlock Text="Formalni način ostane poslovno čist. Sleek pa doda bolj igriv, modernejši videz." FontSize="14"
+                           Foreground="#666" HorizontalAlignment="Center" TextAlignment="Center" Margin="0,0,0,32"/>
                 <UniformGrid Columns="2">
-                    <Button x:Name="BtnFormal" Style="{StaticResource ChoiceBtn}"
-                            Click="BtnFormal_Click">
+                    <Button x:Name="BtnFormal" Style="{StaticResource ChoiceBtn}" Click="BtnFormal_Click">
                         <StackPanel>
                             <TextBlock Text="📋" FontSize="40" HorizontalAlignment="Center"/>
-                            <TextBlock Text="Formalni" FontSize="16" FontWeight="Bold"
-                                       HorizontalAlignment="Center" Margin="0,8,0,0"/>
-                            <TextBlock Text="Klasičen, profesionalen videz&#10;Pisava Arial"
-                                       FontSize="12" Foreground="#666" TextAlignment="Center"
-                                       Margin="0,6,0,0" TextWrapping="Wrap"/>
+                            <TextBlock Text="Formalni" FontSize="16" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,8,0,0"/>
+                            <TextBlock Text="Klasičen, profesionalen videz&#10;Bolj zadržan layout" FontSize="12" Foreground="#666" TextAlignment="Center" Margin="0,6,0,0" TextWrapping="Wrap"/>
                         </StackPanel>
                     </Button>
-                    <Button x:Name="BtnSleek" Style="{StaticResource ChoiceBtn}"
-                            Click="BtnSleek_Click">
+                    <Button x:Name="BtnSleek" Style="{StaticResource ChoiceBtn}" Click="BtnSleek_Click">
                         <StackPanel>
                             <TextBlock Text="✨" FontSize="40" HorizontalAlignment="Center"/>
-                            <TextBlock Text="Sodobni (Sleek)" FontSize="16" FontWeight="Bold"
-                                       HorizontalAlignment="Center" Margin="0,8,0,0"/>
-                            <TextBlock Text="Modernejši, zaobljeni robovi&#10;Pisava Segoe UI"
-                                       FontSize="12" Foreground="#666" TextAlignment="Center"
-                                       Margin="0,6,0,0" TextWrapping="Wrap"/>
+                            <TextBlock Text="Sleek" FontSize="16" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,8,0,0"/>
+                            <TextBlock Text="Bolj zaobljen, živahen in igriv&#10;Primeren za sodobnejši občutek" FontSize="12" Foreground="#666" TextAlignment="Center" Margin="0,6,0,0" TextWrapping="Wrap"/>
                         </StackPanel>
                     </Button>
                 </UniformGrid>
             </StackPanel>
 
-            <!-- Step 2: Dark mode -->
-            <StackPanel x:Name="Step2" Visibility="Collapsed"
-                        VerticalAlignment="Center" HorizontalAlignment="Center"
-                        MaxWidth="600">
-                <TextBlock Text="Svetel ali temen način?" FontSize="22" FontWeight="Bold"
+            <StackPanel x:Name="Step2" Visibility="Collapsed" VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="720">
+                <TextBlock Text="Kateri način prikaza želite?" FontSize="24" FontWeight="Bold"
                            Foreground="#1C2333" HorizontalAlignment="Center" Margin="0,0,0,8"/>
-                <TextBlock Text="Izberite videz ozadja aplikacije." FontSize="14"
+                <TextBlock Text="To lahko kasneje kadarkoli spremenite v nastavitvah." FontSize="14"
                            Foreground="#666" HorizontalAlignment="Center" Margin="0,0,0,32"/>
                 <UniformGrid Columns="2">
-                    <Button x:Name="BtnLight" Style="{StaticResource ChoiceBtn}"
-                            Click="BtnLight_Click">
+                    <Button x:Name="BtnLight" Style="{StaticResource ChoiceBtn}" Click="BtnLight_Click">
                         <StackPanel>
                             <TextBlock Text="☀️" FontSize="40" HorizontalAlignment="Center"/>
-                            <TextBlock Text="Svetel način" FontSize="16" FontWeight="Bold"
-                                       HorizontalAlignment="Center" Margin="0,8,0,0"/>
-                            <TextBlock Text="Belo ozadje, temna pisava"
-                                       FontSize="12" Foreground="#666" TextAlignment="Center"
-                                       Margin="0,6,0,0"/>
+                            <TextBlock Text="Svetel način" FontSize="16" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,8,0,0"/>
+                            <TextBlock Text="Čist bel videz in največ kontrasta" FontSize="12" Foreground="#666" TextAlignment="Center" Margin="0,6,0,0"/>
                         </StackPanel>
                     </Button>
-                    <Button x:Name="BtnDark" Style="{StaticResource ChoiceBtn}"
-                            Click="BtnDark_Click">
+                    <Button x:Name="BtnDark" Style="{StaticResource ChoiceBtn}" Click="BtnDark_Click">
                         <StackPanel>
                             <TextBlock Text="🌙" FontSize="40" HorizontalAlignment="Center"/>
-                            <TextBlock Text="Temen način" FontSize="16" FontWeight="Bold"
-                                       HorizontalAlignment="Center" Margin="0,8,0,0"/>
-                            <TextBlock Text="Temno ozadje, svetla pisava"
-                                       FontSize="12" Foreground="#666" TextAlignment="Center"
-                                       Margin="0,6,0,0"/>
+                            <TextBlock Text="Temen način" FontSize="16" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,8,0,0"/>
+                            <TextBlock Text="Mirnejši pogled in manj bleščanja" FontSize="12" Foreground="#666" TextAlignment="Center" Margin="0,6,0,0"/>
                         </StackPanel>
                     </Button>
                 </UniformGrid>
             </StackPanel>
 
-            <!-- Step 3: Animations -->
-            <StackPanel x:Name="Step3" Visibility="Collapsed"
-                        VerticalAlignment="Center" HorizontalAlignment="Center"
-                        MaxWidth="600">
-                <TextBlock Text="Animacije?" FontSize="22" FontWeight="Bold"
+            <StackPanel x:Name="Step3" Visibility="Collapsed" VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="720">
+                <TextBlock Text="Naj animacije ostanejo vključene?" FontSize="24" FontWeight="Bold"
                            Foreground="#1C2333" HorizontalAlignment="Center" Margin="0,0,0,8"/>
-                <TextBlock Text="Prehodi in animacije naredijo aplikacijo bolj živahno." FontSize="14"
-                           Foreground="#666" HorizontalAlignment="Center" Margin="0,0,0,32"/>
+                <TextBlock Text="Animacije so privzeto vključene, ker naredijo aplikacijo bolj tekočo." FontSize="14"
+                           Foreground="#666" HorizontalAlignment="Center" TextAlignment="Center" Margin="0,0,0,32"/>
                 <UniformGrid Columns="2">
-                    <Button x:Name="BtnAnimOn" Style="{StaticResource ChoiceBtn}"
-                            Click="BtnAnimOn_Click">
+                    <Button x:Name="BtnAnimOn" Style="{StaticResource ChoiceBtn}" Click="BtnAnimOn_Click">
                         <StackPanel>
                             <TextBlock Text="🎬" FontSize="40" HorizontalAlignment="Center"/>
-                            <TextBlock Text="Vklopi animacije" FontSize="16" FontWeight="Bold"
-                                       HorizontalAlignment="Center" Margin="0,8,0,0"/>
-                            <TextBlock Text="Animirani prehodi med stranmi"
-                                       FontSize="12" Foreground="#666" TextAlignment="Center"
-                                       Margin="0,6,0,0"/>
+                            <TextBlock Text="Pusti vključeno" FontSize="16" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,8,0,0"/>
+                            <TextBlock Text="Nežni prehodi med koraki in stranmi" FontSize="12" Foreground="#666" TextAlignment="Center" Margin="0,6,0,0"/>
                         </StackPanel>
                     </Button>
-                    <Button x:Name="BtnAnimOff" Style="{StaticResource ChoiceBtn}"
-                            Click="BtnAnimOff_Click">
+                    <Button x:Name="BtnAnimOff" Style="{StaticResource ChoiceBtn}" Click="BtnAnimOff_Click">
                         <StackPanel>
                             <TextBlock Text="⚡" FontSize="40" HorizontalAlignment="Center"/>
-                            <TextBlock Text="Brez animacij" FontSize="16" FontWeight="Bold"
-                                       HorizontalAlignment="Center" Margin="0,8,0,0"/>
-                            <TextBlock Text="Hitrejši prehodi brez animacij"
-                                       FontSize="12" Foreground="#666" TextAlignment="Center"
-                                       Margin="0,6,0,0"/>
+                            <TextBlock Text="Brez animacij" FontSize="16" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,8,0,0"/>
+                            <TextBlock Text="Neposredni prehodi brez dodatnega gibanja" FontSize="12" Foreground="#666" TextAlignment="Center" Margin="0,6,0,0"/>
                         </StackPanel>
                     </Button>
                 </UniformGrid>
             </StackPanel>
-
         </Grid>
 
-        <!-- Progress dots -->
-        <StackPanel Grid.Row="2" Orientation="Horizontal"
-                    HorizontalAlignment="Center" Margin="0,16,0,24">
-            <Ellipse x:Name="Dot1" Width="10" Height="10" Margin="5,0"
-                     Fill="#0066CC"/>
-            <Ellipse x:Name="Dot2" Width="10" Height="10" Margin="5,0"
-                     Fill="#CCCCCC"/>
-            <Ellipse x:Name="Dot3" Width="10" Height="10" Margin="5,0"
-                     Fill="#CCCCCC"/>
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,16,0,24">
+            <Ellipse x:Name="Dot1" Width="10" Height="10" Margin="5,0" Fill="#0066CC"/>
+            <Ellipse x:Name="Dot2" Width="10" Height="10" Margin="5,0" Fill="#CCCCCC"/>
+            <Ellipse x:Name="Dot3" Width="10" Height="10" Margin="5,0" Fill="#CCCCCC"/>
         </StackPanel>
-
     </Grid>
 </Page>

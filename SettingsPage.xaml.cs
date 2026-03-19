@@ -1,5 +1,4 @@
-using System;
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -22,65 +21,95 @@ namespace EAClient.Pages
             _loading = true;
 
             var prefs = PreferencesService.Load();
-            RbFormal.IsChecked = prefs.Theme == "Formal";
-            RbSleek.IsChecked = prefs.Theme == "Sleek";
+            RbFormal.IsChecked = prefs.ExperienceMode == "Formal";
+            RbSleek.IsChecked = prefs.ExperienceMode == "Sleek";
             RbLight.IsChecked = !prefs.DarkMode;
             RbDark.IsChecked = prefs.DarkMode;
             CbAnimations.IsChecked = prefs.Animations;
+            CbAutoLogin.IsChecked = prefs.AutoLoginEnabled;
 
             UpdateCredText();
             ApplyTheme();
+            AnimationHelper.FadeInFromBelow(ContentStack, 260);
 
             _loading = false;
         }
 
         private void UpdateCredText()
         {
-            SavedCredText.Text = CredentialService.HasSaved()
-                ? "Samodejno prijavljanje je omogočeno"
-                : "Ni shranjenih prijavnih podatkov";
+            var saved = CredentialService.Load();
+            SavedCredText.Text = saved != null
+                ? $"Samodejna prijava je omogočena za uporabnika {saved.Username}."
+                : "Ni shranjene šifrirane seje.";
+            BtnDeleteCred.IsEnabled = saved != null;
         }
 
         private void Theme_Changed(object sender, RoutedEventArgs e)
         {
-            if (_loading) return;
-            SaveSettings();
+            if (!_loading)
+            {
+                SaveSettings();
+            }
         }
 
         private void DarkMode_Changed(object sender, RoutedEventArgs e)
         {
-            if (_loading) return;
-            SaveSettings();
-            ApplyTheme();
+            if (!_loading)
+            {
+                SaveSettings();
+                ApplyTheme();
+            }
         }
 
         private void Anim_Changed(object sender, RoutedEventArgs e)
         {
-            if (_loading) return;
+            if (!_loading)
+            {
+                SaveSettings();
+            }
+        }
+
+        private void AutoLogin_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_loading)
+            {
+                return;
+            }
+
             SaveSettings();
+            if (CbAutoLogin.IsChecked != true)
+            {
+                CredentialService.Delete();
+                UpdateCredText();
+            }
         }
 
         private void SaveSettings()
         {
             var prefs = PreferencesService.Load();
-            prefs.Theme = RbSleek.IsChecked == true ? "Sleek" : "Formal";
+            prefs.ExperienceMode = RbSleek.IsChecked == true ? "Sleek" : "Formal";
             prefs.DarkMode = RbDark.IsChecked == true;
             prefs.Animations = CbAnimations.IsChecked == true;
+            prefs.AutoLoginEnabled = CbAutoLogin.IsChecked == true;
             PreferencesService.Save(prefs);
             ShowSavedMsg();
+            UpdateCredText();
         }
 
         private async void ShowSavedMsg()
         {
-            const int SavedMessageDisplayDurationMs = 2000;
             SavedMsg.Visibility = Visibility.Visible;
-            await Task.Delay(SavedMessageDisplayDurationMs);
+            await Task.Delay(1800);
             SavedMsg.Visibility = Visibility.Collapsed;
         }
 
         private void DeleteCred_Click(object sender, RoutedEventArgs e)
         {
             CredentialService.Delete();
+            var prefs = PreferencesService.Load();
+            prefs.AutoLoginEnabled = false;
+            PreferencesService.Save(prefs);
+            CbAutoLogin.IsChecked = false;
             UpdateCredText();
         }
 
@@ -92,6 +121,7 @@ namespace EAClient.Pages
             ThemeCard.BorderBrush = AppTheme.BorderBrush;
             AccountCard.Background = AppTheme.CardBrush;
             AccountCard.BorderBrush = AppTheme.BorderBrush;
+            FontFamily = new FontFamily(AppTheme.FontFamily);
         }
     }
 }

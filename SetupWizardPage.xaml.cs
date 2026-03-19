@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using EAClient.Services;
@@ -8,36 +8,43 @@ namespace EAClient.Pages
     public partial class SetupWizardPage : Page
     {
         private readonly Frame _frame;
-        private readonly UserPreferences _prefs = new();
-        private int _step = 1;
+        private readonly UserPreferences _prefs;
 
         public SetupWizardPage(Frame frame)
         {
             InitializeComponent();
             _frame = frame;
+            _prefs = PreferencesService.Load();
+            Loaded += SetupWizardPage_Loaded;
+        }
+
+        private void SetupWizardPage_Loaded(object sender, RoutedEventArgs e)
+        {
+            ApplyTheme();
+            AnimationHelper.FadeInFromBelow(ContentHost, 320);
         }
 
         private void GoToStep(int step)
         {
-            _step = step;
             Step1.Visibility = step == 1 ? Visibility.Visible : Visibility.Collapsed;
             Step2.Visibility = step == 2 ? Visibility.Visible : Visibility.Collapsed;
             Step3.Visibility = step == 3 ? Visibility.Visible : Visibility.Collapsed;
             StepLabel.Text = $"Korak {step} od 3";
-            Dot1.Fill = new SolidColorBrush(step >= 1 ? Color.FromRgb(0, 102, 204) : Color.FromRgb(204, 204, 204));
-            Dot2.Fill = new SolidColorBrush(step >= 2 ? Color.FromRgb(0, 102, 204) : Color.FromRgb(204, 204, 204));
-            Dot3.Fill = new SolidColorBrush(step >= 3 ? Color.FromRgb(0, 102, 204) : Color.FromRgb(204, 204, 204));
+            Dot1.Fill = step >= 1 ? AppTheme.AccentBrush : Brushes.LightGray;
+            Dot2.Fill = step >= 2 ? AppTheme.AccentBrush : Brushes.LightGray;
+            Dot3.Fill = step >= 3 ? AppTheme.AccentBrush : Brushes.LightGray;
+            AnimationHelper.FadeInFromBelow(ContentHost, 260);
         }
 
         private void BtnFormal_Click(object sender, RoutedEventArgs e)
         {
-            _prefs.Theme = "Formal";
+            _prefs.ExperienceMode = "Formal";
             GoToStep(2);
         }
 
         private void BtnSleek_Click(object sender, RoutedEventArgs e)
         {
-            _prefs.Theme = "Sleek";
+            _prefs.ExperienceMode = "Sleek";
             GoToStep(2);
         }
 
@@ -70,10 +77,20 @@ namespace EAClient.Pages
             _prefs.IsFirstRun = false;
             PreferencesService.Save(_prefs);
 
-            if (CredentialService.HasSaved())
-                _frame.Navigate(new AutoLoginPage(_frame));
-            else
-                _frame.Navigate(new LoginPage());
+            if (_prefs.AutoLoginEnabled && CredentialService.HasSaved())
+            {
+                AnimationHelper.NavigateWithTransition(_frame, new AutoLoginPage(_frame));
+                return;
+            }
+
+            AnimationHelper.NavigateWithTransition(_frame, new LoginPage());
+        }
+
+        private void ApplyTheme()
+        {
+            RootGrid.Background = AppTheme.BgBrush;
+            TitleBar.Background = AppTheme.TitleBarBrush;
+            FontFamily = new FontFamily(AppTheme.FontFamily);
         }
     }
 }

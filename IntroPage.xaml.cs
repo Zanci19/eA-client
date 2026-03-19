@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
@@ -42,16 +42,16 @@ namespace EAClient.Pages
             // Check first-run setup
             if (PreferencesService.IsFirstRun())
             {
-                _frame.Navigate(new SetupWizardPage(_frame));
+                AnimationHelper.NavigateWithTransition(_frame, new SetupWizardPage(_frame));
                 return;
             }
-            // Check saved credentials for auto-login
-            if (CredentialService.HasSaved())
+            var prefs = PreferencesService.Load();
+            if (prefs.AutoLoginEnabled && CredentialService.HasSaved())
             {
-                _frame.Navigate(new AutoLoginPage(_frame));
+                AnimationHelper.NavigateWithTransition(_frame, new AutoLoginPage(_frame));
                 return;
             }
-            _frame.Navigate(new LoginPage());
+            AnimationHelper.NavigateWithTransition(_frame, new LoginPage());
         }
     }
 }
