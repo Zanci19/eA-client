@@ -83,7 +83,7 @@ namespace EAClient.Pages
 
                 if (prefs.AutoLoginEnabled)
                 {
-                    CredentialService.Save(username, result.RefreshToken, result.User.Id);
+                    CredentialService.Save(username, password, result.RefreshToken, result.User.Id);
                 }
                 else
                 {
