@@ -225,7 +225,7 @@ namespace EAClient.Pages
         {
             var now = DateTime.Now.TimeOfDay;
             if (TimeSpan.TryParse(from, out var f) && TimeSpan.TryParse(to, out var t))
-                return now >= f && now <= t;
+                return now >= f && now < t;
             return false;
         }
 

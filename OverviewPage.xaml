@@ -87,7 +87,7 @@
                     <Border Grid.Row="2" Grid.Column="0" Background="White" CornerRadius="8"
                             Padding="20" BorderBrush="#E4E8F0" BorderThickness="1">
                         <StackPanel>
-                            <TextBlock Text="📋  Prihajajoca ocenjevanja" FontSize="15" FontWeight="Bold"
+                            <TextBlock Text="📋  Prihajajoča ocenjevanja" FontSize="15" FontWeight="Bold"
                                        Foreground="#0066CC" Margin="0,0,0,14"/>
                             <StackPanel x:Name="EvaluationsPanel"/>
                         </StackPanel>
