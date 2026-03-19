@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
@@ -13,7 +13,9 @@ namespace EAClient.Pages
     public partial class CommunicationPage : Page
     {
         private readonly List<(string Id, string Title, string Subtitle, JsonElement Raw)> _channels = new();
+        private readonly List<(string Id, string Name, string Subtitle, JsonElement Raw)> _contactResults = new();
         private string _selectedChannelId = string.Empty;
+        private int _activeInstitutionId;
 
         public CommunicationPage()
         {
@@ -34,6 +36,10 @@ namespace EAClient.Pages
                 ConversationTitle.Text = "Nalaganje pogovorov...";
                 ChannelsList.Items.Clear();
                 _channels.Clear();
+                _selectedChannelId = string.Empty;
+                UpdateComposerState();
+                await LoadInstitutionAsync();
+
                 var channelsJson = await EAsistentService.GetMessageChannelsAsync(AuthState.AccessToken, 25);
                 var items = ExtractArray(channelsJson, "data", "channels");
                 foreach (var item in items.EnumerateArray())
@@ -70,6 +76,25 @@ namespace EAClient.Pages
             }
         }
 
+        private async Task LoadInstitutionAsync()
+        {
+            if (_activeInstitutionId > 0)
+            {
+                return;
+            }
+
+            var me = await EAsistentService.GetCommunicationMeAsync(AuthState.AccessToken);
+            var institutions = ExtractArray(me, "data", "institutions");
+            foreach (var institution in institutions.EnumerateArray())
+            {
+                if (institution.TryGetProperty("id", out var idValue) && idValue.TryGetInt32(out var id) && id > 0)
+                {
+                    _activeInstitutionId = id;
+                    break;
+                }
+            }
+        }
+
         private Border BuildChannelItem(string title, string subtitle)
         {
             var border = new Border
@@ -96,6 +121,7 @@ namespace EAClient.Pages
             _selectedChannelId = _channels[ChannelsList.SelectedIndex].Id;
             ConversationTitle.Text = _channels[ChannelsList.SelectedIndex].Title;
             ConversationMeta.Text = "Nalaganje sporočil...";
+            UpdateComposerState();
             await LoadMessagesAsync(_selectedChannelId);
         }
 
@@ -210,6 +236,121 @@ namespace EAClient.Pages
             }
         }
 
+        private async void SearchRecipientsButton_Click(object sender, RoutedEventArgs e)
+        {
+            await SearchRecipientsAsync();
+        }
+
+        private async Task SearchRecipientsAsync()
+        {
+            var query = NewMessageRecipientInput.Text.Trim();
+            ContactResultsList.Items.Clear();
+            _contactResults.Clear();
+
+            if (string.IsNullOrWhiteSpace(query))
+            {
+                NewMessageStatus.Text = "Vnesi ime prejemnika za iskanje.";
+                return;
+            }
+
+            try
+            {
+                await LoadInstitutionAsync();
+                var response = await EAsistentService.SearchCommunicationContactsAsync(AuthState.AccessToken, query, _activeInstitutionId);
+                var users = ExtractArray(response, "data");
+                foreach (var user in users.EnumerateArray())
+                {
+                    var id = GetStr(user, "id", string.Empty);
+                    if (string.IsNullOrWhiteSpace(id)) continue;
+                    var name = GetStr(user, "firstname", string.Empty);
+                    var lastName = GetStr(user, "lastname", string.Empty);
+                    var fullName = string.Join(" ", new[] { name, lastName }.Where(part => !string.IsNullOrWhiteSpace(part))).Trim();
+                    if (string.IsNullOrWhiteSpace(fullName))
+                    {
+                        fullName = GetStr(user, "name", "Prejemnik");
+                    }
+                    var subtitle = GetStr(user, "title", GetStr(user, "email", string.Empty));
+                    _contactResults.Add((id, fullName, subtitle, user));
+                    ContactResultsList.Items.Add(BuildChannelItem(fullName, string.IsNullOrWhiteSpace(subtitle) ? $"ID: {id}" : subtitle));
+                }
+
+                NewMessageStatus.Text = _contactResults.Count == 0
+                    ? "Ni zadetkov za izbran pojem."
+                    : "Izberi prejemnika s seznama spodaj.";
+            }
+            catch (Exception ex)
+            {
+                NewMessageStatus.Text = ex.Message;
+            }
+        }
+
+        private void ContactResultsList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (ContactResultsList.SelectedIndex < 0 || ContactResultsList.SelectedIndex >= _contactResults.Count)
+            {
+                return;
+            }
+
+            var selected = _contactResults[ContactResultsList.SelectedIndex];
+            NewMessageRecipientInput.Text = selected.Name;
+            NewMessageStatus.Text = $"Izbran prejemnik: {selected.Name}";
+        }
+
+        private async void SendNewMessageButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (ContactResultsList.SelectedIndex < 0 || ContactResultsList.SelectedIndex >= _contactResults.Count)
+            {
+                MessageBox.Show("Najprej izberi prejemnika iz rezultatov iskanja.", "Nova komunikacija", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var message = NewMessageBodyInput.Text.Trim();
+            if (string.IsNullOrWhiteSpace(message))
+            {
+                MessageBox.Show("Vnesi vsebino novega sporočila.", "Nova komunikacija", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            SendNewMessageButton.IsEnabled = false;
+            try
+            {
+                await LoadInstitutionAsync();
+                var selected = _contactResults[ContactResultsList.SelectedIndex];
+                var title = string.IsNullOrWhiteSpace(NewMessageTitleInput.Text) ? selected.Name : NewMessageTitleInput.Text.Trim();
+                var created = await EAsistentService.CreateNewMessageChannelAsync(
+                    AuthState.AccessToken,
+                    title,
+                    message,
+                    _activeInstitutionId,
+                    new[] { selected.Raw });
+
+                NewMessageBodyInput.Text = string.Empty;
+                NewMessageTitleInput.Text = string.Empty;
+                NewMessageStatus.Text = "Novo sporočilo je bilo ustvarjeno.";
+                ContactResultsList.Items.Clear();
+                _contactResults.Clear();
+                await LoadChannelsAsync();
+
+                var newId = GetStr(created, "id", string.Empty);
+                if (!string.IsNullOrWhiteSpace(newId))
+                {
+                    var index = _channels.FindIndex(channel => channel.Id == newId);
+                    if (index >= 0)
+                    {
+                        ChannelsList.SelectedIndex = index;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ustvarjanje novega sporočila ni uspelo.\n{ex.Message}", "Nova komunikacija", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+            finally
+            {
+                SendNewMessageButton.IsEnabled = true;
+            }
+        }
+
         private async void RefreshButton_Click(object sender, RoutedEventArgs e)
         {
             if (string.IsNullOrWhiteSpace(_selectedChannelId))
@@ -220,12 +361,23 @@ namespace EAClient.Pages
             await LoadMessagesAsync(_selectedChannelId);
         }
 
+        private void UpdateComposerState()
+        {
+            var enabled = !string.IsNullOrWhiteSpace(_selectedChannelId);
+            MessageInput.IsEnabled = enabled;
+            SendButton.IsEnabled = enabled;
+            if (!enabled)
+            {
+                MessageInput.Text = string.Empty;
+            }
+        }
+
         private void ApplyTheme()
         {
             RootGrid.Background = AppTheme.BgBrush;
             TitleBar.Background = AppTheme.TitleBarBrush;
             FontFamily = new FontFamily(AppTheme.FontFamily);
-            foreach (var card in new[] { ChannelsCard, MessagesCard, ComposerCard })
+            foreach (var card in new[] { ChannelsCard, MessagesCard, ComposerCard, NewMessageCard })
             {
                 card.Background = AppTheme.CardBrush;
                 card.BorderBrush = AppTheme.BorderBrush;
@@ -236,18 +388,30 @@ namespace EAClient.Pages
             MessageInput.Background = AppTheme.BgBrush;
             MessageInput.Foreground = AppTheme.TextBrush;
             MessageInput.BorderBrush = AppTheme.BorderBrush;
-            foreach (var button in new[] { RefreshButton, SendButton })
+            foreach (var textBox in new[] { NewMessageRecipientInput, NewMessageTitleInput, NewMessageBodyInput })
+            {
+                textBox.Background = AppTheme.BgBrush;
+                textBox.Foreground = AppTheme.TextBrush;
+                textBox.BorderBrush = AppTheme.BorderBrush;
+            }
+            foreach (var button in new[] { RefreshButton, SendButton, SearchRecipientsButton, SendNewMessageButton })
             {
                 button.Background = AppTheme.AccentBrush;
                 button.Foreground = Brushes.White;
                 button.BorderThickness = new Thickness(0);
             }
+            NewMessageStatus.Foreground = AppTheme.SubTextBrush;
         }
 
         private static JsonElement ExtractArray(JsonElement root, params string[] keys)
         {
             foreach (var key in keys)
             {
+                if (root.ValueKind != JsonValueKind.Object)
+                {
+                    return default;
+                }
+
                 if (root.TryGetProperty(key, out var value))
                 {
                     if (value.ValueKind == JsonValueKind.Array) return value;
@@ -261,29 +425,31 @@ namespace EAClient.Pages
         {
             if (element.ValueKind == JsonValueKind.Object && element.TryGetProperty(property, out var value))
             {
-                if (value.ValueKind == JsonValueKind.String) return value.GetString() ?? fallback;
-                if (value.ValueKind == JsonValueKind.Number) return value.GetRawText();
+                return value.ValueKind == JsonValueKind.String ? value.GetString() ?? fallback : value.ToString();
             }
             return fallback;
         }
 
-        private static string GetNestedStr(JsonElement element, IReadOnlyList<string> path, string fallback)
+        private static string GetNestedStr(JsonElement element, string[] path, string fallback)
         {
             var current = element;
-            foreach (var segment in path)
+            foreach (var key in path)
             {
-                if (current.ValueKind != JsonValueKind.Object || !current.TryGetProperty(segment, out current))
+                if (current.ValueKind != JsonValueKind.Object || !current.TryGetProperty(key, out current))
+                {
                     return fallback;
+                }
             }
-            return current.ValueKind switch
-            {
-                JsonValueKind.String => current.GetString() ?? fallback,
-                JsonValueKind.Number => current.GetRawText(),
-                _ => fallback
-            };
+            return current.ValueKind == JsonValueKind.String ? current.GetString() ?? fallback : current.ToString();
         }
 
         private static bool GetBool(JsonElement element, string property)
-            => element.ValueKind == JsonValueKind.Object && element.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.True;
+        {
+            if (element.ValueKind == JsonValueKind.Object && element.TryGetProperty(property, out var value) && value.ValueKind is JsonValueKind.True or JsonValueKind.False)
+            {
+                return value.GetBoolean();
+            }
+            return false;
+        }
     }
 }

@@ -25,6 +25,7 @@ namespace EAClient.Services
         };
 
         private static string _communicationToken = string.Empty;
+        private static readonly JsonSerializerOptions _jsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
         private static HttpRequestMessage CreateRequest(HttpMethod method, string url, string? token = null)
         {
@@ -219,6 +220,9 @@ namespace EAClient.Services
         public static async Task<JsonElement> GetCommunicationNewsAsync(string token)
             => await SendCommunicationJsonAsync(CreateCommunicationRequest(HttpMethod.Get, "/api/me/news", token));
 
+        public static async Task<JsonElement> GetCommunicationMeAsync(string token)
+            => await SendCommunicationJsonAsync(CreateCommunicationRequest(HttpMethod.Get, "/api/me", token));
+
         public static async Task<JsonElement> GetMessageChannelsAsync(string token, int limit = 20, string? to = null)
         {
             var extra = string.IsNullOrWhiteSpace(to) ? string.Empty : $"&to={Uri.EscapeDataString(to)}";
@@ -234,7 +238,29 @@ namespace EAClient.Services
         public static async Task<JsonElement> SendChannelMessageAsync(string token, string channelId, string message)
         {
             var request = CreateCommunicationRequest(HttpMethod.Post, $"/api/channels/{channelId}/messages", token);
-            request.Content = new StringContent(JsonSerializer.Serialize(new { message }), Encoding.UTF8, "application/json");
+            request.Content = new StringContent(JsonSerializer.Serialize(new { message }, _jsonOptions), Encoding.UTF8, "application/json");
+            return await SendCommunicationJsonAsync(request);
+        }
+
+        public static async Task<JsonElement> SearchCommunicationContactsAsync(string token, string query, int institutionId)
+            => await SendCommunicationJsonAsync(CreateCommunicationRequest(HttpMethod.Get, $"/api/search/contacts/{institutionId}/{Uri.EscapeDataString(query)}", token));
+
+        public static async Task<JsonElement> CreateNewMessageChannelAsync(string token, string title, string body, int institutionId, IEnumerable<JsonElement> participants)
+        {
+            var participantPayload = participants
+                .Select(participant => JsonSerializer.Deserialize<object>(participant.GetRawText())!)
+                .ToArray();
+
+            var request = CreateCommunicationRequest(HttpMethod.Post, "/api/channels?type=message", token);
+            request.Content = new StringContent(JsonSerializer.Serialize(new
+            {
+                type = "message",
+                title,
+                body,
+                participants = participantPayload,
+                blockedSelectedUsers = Array.Empty<object>(),
+                institutionId
+            }, _jsonOptions), Encoding.UTF8, "application/json");
             return await SendCommunicationJsonAsync(request);
         }
 
@@ -244,12 +270,9 @@ namespace EAClient.Services
             UpdateCommunicationToken(response);
             var json = await response.Content.ReadAsStringAsync();
 
-            if (response.StatusCode == HttpStatusCode.Unauthorized && !string.IsNullOrWhiteSpace(AuthState.AccessToken) && request.Headers.Authorization == null)
+            if (response.StatusCode == HttpStatusCode.Unauthorized)
             {
-                using var retryRequest = CloneRequest(request, AuthState.AccessToken);
-                response = await _communicationClient.SendAsync(retryRequest);
-                UpdateCommunicationToken(response);
-                json = await response.Content.ReadAsStringAsync();
+                (response, json) = await RetryCommunicationUnauthorizedAsync(request, response, json);
             }
 
             if (!response.IsSuccessStatusCode)
@@ -259,6 +282,42 @@ namespace EAClient.Services
 
             using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(json) ? "{}" : json);
             return doc.RootElement.Clone();
+        }
+
+        private static async Task<(HttpResponseMessage response, string json)> RetryCommunicationUnauthorizedAsync(HttpRequestMessage request, HttpResponseMessage response, string json)
+        {
+            if (!string.IsNullOrWhiteSpace(AuthState.RefreshToken))
+            {
+                try
+                {
+                    var freshAccessToken = await RefreshTokenAsync(AuthState.RefreshToken);
+                    if (!string.IsNullOrWhiteSpace(freshAccessToken))
+                    {
+                        AuthState.AccessToken = freshAccessToken;
+                        using var refreshedRequest = CloneRequest(request, freshAccessToken);
+                        response = await _communicationClient.SendAsync(refreshedRequest);
+                        UpdateCommunicationToken(response);
+                        json = await response.Content.ReadAsStringAsync();
+                        if (response.IsSuccessStatusCode)
+                        {
+                            return (response, json);
+                        }
+                    }
+                }
+                catch
+                {
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(AuthState.AccessToken) && request.Headers.Authorization == null)
+            {
+                using var retryRequest = CloneRequest(request, AuthState.AccessToken);
+                response = await _communicationClient.SendAsync(retryRequest);
+                UpdateCommunicationToken(response);
+                json = await response.Content.ReadAsStringAsync();
+            }
+
+            return (response, json);
         }
 
         private static HttpRequestMessage CloneRequest(HttpRequestMessage source, string token)
