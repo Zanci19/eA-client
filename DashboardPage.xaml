@@ -56,6 +56,9 @@
                     <Button x:Name="NavHomework" Content="📚  Domače naloge" Style="{StaticResource NavBtnStyle}" Click="NavHomework_Click"/>
                     <Button x:Name="NavAbsences" Content="❌  Izostanki" Style="{StaticResource NavBtnStyle}" Click="NavAbsences_Click"/>
                     <Button x:Name="NavEval" Content="📋  Ocenjevanja" Style="{StaticResource NavBtnStyle}" Click="NavEval_Click"/>
+                    <Button x:Name="NavExams" Content="🎓  Izpiti" Style="{StaticResource NavBtnStyle}" Click="NavExams_Click"/>
+                    <Button x:Name="NavPraises" Content="⭐  Pohvale" Style="{StaticResource NavBtnStyle}" Click="NavPraises_Click"/>
+                    <Button x:Name="NavConsents" Content="📄  Soglasja" Style="{StaticResource NavBtnStyle}" Click="NavConsents_Click"/>
                     <Button x:Name="NavProfile" Content="👤  Profil" Style="{StaticResource NavBtnStyle}" Click="NavProfile_Click"/>
                     <Button x:Name="NavSettings" Content="⚙️  Nastavitve" Style="{StaticResource NavBtnStyle}" Click="NavSettings_Click"/>
                 </StackPanel>

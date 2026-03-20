@@ -33,6 +33,9 @@ namespace EAClient.Pages
         private void NavHomework_Click(object sender, RoutedEventArgs e) => NavigateTo(new HomeworkPage());
         private void NavAbsences_Click(object sender, RoutedEventArgs e) => NavigateTo(new AbsencesPage());
         private void NavEval_Click(object sender, RoutedEventArgs e) => NavigateTo(new EvaluationsPage());
+        private void NavExams_Click(object sender, RoutedEventArgs e) => NavigateTo(new ExamsPage());
+        private void NavPraises_Click(object sender, RoutedEventArgs e) => NavigateTo(new PraisesPage());
+        private void NavConsents_Click(object sender, RoutedEventArgs e) => NavigateTo(new ConsentsPage());
         private void NavProfile_Click(object sender, RoutedEventArgs e) => NavigateTo(new ProfilePage());
         private void NavSettings_Click(object sender, RoutedEventArgs e) => NavigateTo(new SettingsPage());
 

@@ -16,7 +16,6 @@ namespace EAClient.Services
 
         private static readonly HttpClient _client = CreateClient("https://www.easistent.com");
         private static readonly HttpClient _communicationClient = CreateClient("https://komunikacija.easistent.com");
-        private static readonly HttpClient _sessionBootstrapClient = CreateClient();
 
         private static string _communicationToken = string.Empty;
         private static readonly JsonSerializerOptions _jsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
@@ -56,8 +55,9 @@ namespace EAClient.Services
         {
             var request = new HttpRequestMessage(method, url);
             request.Headers.TryAddWithoutValidation("Accept", "application/json, text/plain, */*");
-            request.Headers.TryAddWithoutValidation("x-requested-with", "XMLHttpRequest");
-            request.Headers.TryAddWithoutValidation("x-school-name", "easistent");
+            request.Headers.TryAddWithoutValidation("x-app-name", "moj_asistent_parent");
+            request.Headers.TryAddWithoutValidation("x-client-version", "100000");
+            request.Headers.TryAddWithoutValidation("x-client-platform", "ios");
             var bearerToken = string.IsNullOrWhiteSpace(token) ? _communicationToken : token;
             if (!string.IsNullOrWhiteSpace(bearerToken))
             {
@@ -257,7 +257,7 @@ namespace EAClient.Services
         public static async Task<JsonElement> GetMessageChannelsAsync(string token, int limit = 20, string? to = null)
         {
             var extra = string.IsNullOrWhiteSpace(to) ? string.Empty : $"&to={Uri.EscapeDataString(to)}";
-            return await SendCommunicationJsonAsync(CreateCommunicationRequest(HttpMethod.Get, $"/api/channels?pinned=false&limit={limit}&type=message{extra}", token));
+            return await SendCommunicationJsonAsync(CreateCommunicationRequest(HttpMethod.Get, $"/api/channels?type=message&limit={limit}&only_pinned=false&exclude_pinned=true{extra}", token));
         }
 
         public static async Task<JsonElement> GetChannelDetailsAsync(string token, string channelId)
@@ -281,7 +281,7 @@ namespace EAClient.Services
         public static async Task<JsonElement> GetChannelsAsync(string token, string channelType = "message", int limit = 20, string? to = null)
         {
             var extra = string.IsNullOrWhiteSpace(to) ? string.Empty : $"&to={Uri.EscapeDataString(to)}";
-            return await SendCommunicationJsonAsync(CreateCommunicationRequest(HttpMethod.Get, $"/api/channels?pinned=false&limit={limit}&type={channelType}{extra}", token));
+            return await SendCommunicationJsonAsync(CreateCommunicationRequest(HttpMethod.Get, $"/api/channels?type={channelType}&limit={limit}&only_pinned=false&exclude_pinned=true{extra}", token));
         }
 
         public static async Task<JsonElement> GetCommunicationUnseenAsync(string token)
@@ -343,6 +343,18 @@ namespace EAClient.Services
 
         private static async Task<JsonElement> SendCommunicationJsonAsync(HttpRequestMessage request)
         {
+            // Proactively ensure we have a communication token before sending
+            if (string.IsNullOrWhiteSpace(_communicationToken) && !string.IsNullOrWhiteSpace(AuthState.AccessToken))
+            {
+                await AcquireCommunicationTokenAsync(AuthState.AccessToken);
+                // Rebuild authorization header with the newly acquired token
+                request.Headers.Remove("Authorization");
+                if (!string.IsNullOrWhiteSpace(_communicationToken))
+                {
+                    request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {_communicationToken}");
+                }
+            }
+
             var response = await _communicationClient.SendAsync(request);
             UpdateCommunicationToken(response);
             var json = await response.Content.ReadAsStringAsync();
@@ -378,81 +390,41 @@ namespace EAClient.Services
                 }
             }
 
-            await EnsureCommunicationSessionAsync(AuthState.AccessToken);
+            _communicationToken = string.Empty;
+            await AcquireCommunicationTokenAsync(AuthState.AccessToken);
 
             using var retryRequest = CloneRequest(request, null);
             response = await _communicationClient.SendAsync(retryRequest);
             UpdateCommunicationToken(response);
             json = await response.Content.ReadAsStringAsync();
 
-            if (!response.IsSuccessStatusCode && !string.IsNullOrWhiteSpace(AuthState.AccessToken))
-            {
-                using var fallbackRequest = CloneRequest(request, AuthState.AccessToken);
-                response = await _communicationClient.SendAsync(fallbackRequest);
-                UpdateCommunicationToken(response);
-                json = await response.Content.ReadAsStringAsync();
-            }
-
             return (response, json);
         }
 
-        private static async Task EnsureCommunicationSessionAsync(string token)
+        private static async Task AcquireCommunicationTokenAsync(string eaToken)
         {
-            if (string.IsNullOrWhiteSpace(token))
+            try
             {
-                return;
-            }
-
-            // If we already have a communication token, verify it is still valid using that token (not the eA token)
-            if (!string.IsNullOrWhiteSpace(_communicationToken))
-            {
-                try
+                // The official method: exchange the eA access token for a communication JWT
+                var tokenRequest = CreateRequest(HttpMethod.Get, "/m/communication_login_get_token", eaToken);
+                using var tokenResponse = await _client.SendAsync(tokenRequest);
+                if (tokenResponse.IsSuccessStatusCode)
                 {
-                    using var checkRequest = CreateCommunicationRequest(HttpMethod.Get, "/api/me?institution_id=0");
-                    using var checkResponse = await _communicationClient.SendAsync(checkRequest);
-                    UpdateCommunicationToken(checkResponse);
-                    if (checkResponse.IsSuccessStatusCode)
+                    var json = await tokenResponse.Content.ReadAsStringAsync();
+                    using var doc = JsonDocument.Parse(json);
+                    if (doc.RootElement.TryGetProperty("token", out var t))
                     {
-                        return;
+                        var tok = t.GetString();
+                        if (!string.IsNullOrWhiteSpace(tok))
+                        {
+                            _communicationToken = tok;
+                            return;
+                        }
                     }
                 }
-                catch
-                {
-                }
-                _communicationToken = string.Empty;
             }
-
-            // Bootstrap the komunikacija session via the eAsistent one-time-login redirect chain
-            using (var bootstrapRequest = new HttpRequestMessage(HttpMethod.Get, "https://moj.easistent.com/api/external_service?redirect_to=chat"))
+            catch
             {
-                ApplyCommonHeaders(bootstrapRequest, token);
-                bootstrapRequest.Headers.TryAddWithoutValidation("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
-
-                // Read the full response so all redirects are followed and session cookies are set
-                using var bootstrapResponse = await _sessionBootstrapClient.SendAsync(bootstrapRequest);
-                UpdateCommunicationToken(bootstrapResponse);
-                if (!string.IsNullOrWhiteSpace(_communicationToken))
-                {
-                    return;
-                }
-            }
-
-            // Probe endpoints WITHOUT the eA Bearer token — the server issues its own JWT via session cookies
-            foreach (var endpoint in new[] { "/api/logged_in", "/api/environment", "/api/me?institution_id=0" })
-            {
-                try
-                {
-                    using var probeRequest = CreateCommunicationRequest(HttpMethod.Get, endpoint);
-                    using var probeResponse = await _communicationClient.SendAsync(probeRequest);
-                    UpdateCommunicationToken(probeResponse);
-                    if (!string.IsNullOrWhiteSpace(_communicationToken))
-                    {
-                        return;
-                    }
-                }
-                catch
-                {
-                }
             }
         }
 
@@ -495,6 +467,46 @@ namespace EAClient.Services
 
         public static Task<JsonElement> GetChildInfoAsync(string token)
             => GetJsonWithRefreshAsync(token, "/m/me/child");
+
+        public static Task<JsonElement> GetExamsAsync(string token)
+            => GetJsonWithRefreshAsync(token, "/m/exams");
+
+        public static Task<JsonElement> GetPraisesAsync(string token)
+            => GetJsonWithRefreshAsync(token, "/m/praises_and_improvements");
+
+        public static Task<JsonElement> GetConsentsAsync(string token)
+            => GetJsonWithRefreshAsync(token, "/m/consents");
+
+        public static Task<JsonElement> GetConsentAsync(string token, string uuid)
+            => GetJsonWithRefreshAsync(token, $"/m/consent/{Uri.EscapeDataString(uuid)}");
+
+        public static async Task<JsonElement> SubmitConsentAsync(string token, string uuid, object payload)
+        {
+            var request = CreateRequest(HttpMethod.Post, $"/m/submit_consent/{Uri.EscapeDataString(uuid)}", token);
+            request.Content = new StringContent(JsonSerializer.Serialize(payload, _jsonOptions), Encoding.UTF8, "application/json");
+            var response = await _client.SendAsync(request);
+            var json = await response.Content.ReadAsStringAsync();
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new Exception($"Napaka ({(int)response.StatusCode}): {TryGetErrorMessage(json)}");
+            }
+            using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(json) ? "{}" : json);
+            return doc.RootElement.Clone();
+        }
+
+        public static Task<JsonElement> GetMealsStatusAsync(string token, DateTime from, DateTime to)
+            => GetJsonWithRefreshAsync(token, $"/m/meals/status?from={from:yyyy-MM-dd}&to={to:yyyy-MM-dd}");
+
+        public static Task<JsonElement> GetOverviewBasicAsync(string token)
+            => GetJsonWithRefreshAsync(token, "/m/overview/basic");
+
+        public static async Task LogoutAsync(string token, string deviceId = "")
+        {
+            var id = string.IsNullOrWhiteSpace(deviceId) ? "eaclient-desktop" : deviceId;
+            var request = CreateRequest(HttpMethod.Delete, $"/m/logout?device_id={Uri.EscapeDataString(id)}", token);
+            var response = await _client.SendAsync(request);
+            _ = await response.Content.ReadAsStringAsync();
+        }
 
         private static string WrapHtml(string text)
             => $"<p>{WebUtility.HtmlEncode(text).Replace("\n", "<br />")}</p>";
