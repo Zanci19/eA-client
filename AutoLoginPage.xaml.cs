@@ -52,7 +52,12 @@ namespace EAClient.Pages
                     {
                         var newToken = await EAsistentService.RefreshTokenAsync(saved.RefreshToken);
                         AuthState.AccessToken = newToken;
-                        AuthState.RefreshToken = saved.RefreshToken;
+                        // AuthState.RefreshToken is updated inside RefreshTokenAsync if the server issued a new one;
+                        // fall back to the saved token only when it wasn't updated.
+                        if (string.IsNullOrWhiteSpace(AuthState.RefreshToken))
+                        {
+                            AuthState.RefreshToken = saved.RefreshToken;
+                        }
                         loggedIn = !string.IsNullOrWhiteSpace(newToken);
                     }
                     catch
@@ -108,7 +113,6 @@ namespace EAClient.Pages
             }
             catch
             {
-                CredentialService.Delete();
                 _frame.Navigate(new LoginPage());
             }
         }

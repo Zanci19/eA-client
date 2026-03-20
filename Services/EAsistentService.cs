@@ -133,11 +133,22 @@ namespace EAClient.Services
             if (doc.RootElement.TryGetProperty("access_token", out var at)
                 && at.TryGetProperty("token", out var t))
             {
+                // Also update the stored refresh token if the server issued a new one
+                if (doc.RootElement.TryGetProperty("refresh_token", out var rt))
+                {
+                    var newRefreshToken = rt.GetString();
+                    if (!string.IsNullOrWhiteSpace(newRefreshToken))
+                    {
+                        AuthState.RefreshToken = newRefreshToken;
+                    }
+                }
                 return t.GetString() ?? string.Empty;
             }
 
             throw new Exception("Napaka pri razčlenjevanju odgovora za osvežitev žetona.");
         }
+
+        public static string GetCommunicationToken() => _communicationToken;
 
         public static async Task<List<TimetableEvent>> GetTimetableAsync(string token, DateTime from, DateTime to)
         {
@@ -320,12 +331,21 @@ namespace EAClient.Services
         }
 
         public static async Task<JsonElement> SearchCommunicationContactsAsync(string token, string query, int institutionId)
-            => await SendCommunicationJsonAsync(CreateCommunicationRequest(HttpMethod.Get, $"/api/search/contacts/{institutionId}/{Uri.EscapeDataString(query)}", token));
+            => await GetCommunicationContactsForInstitutionAsync(token, institutionId);
 
         public static async Task<JsonElement> CreateNewMessageChannelAsync(string token, string title, string body, int institutionId, IEnumerable<JsonElement> participants)
         {
             var participantPayload = participants
-                .Select(participant => JsonSerializer.Deserialize<object>(participant.GetRawText())!)
+                .Select(participant =>
+                {
+                    if (participant.ValueKind == JsonValueKind.Object
+                        && participant.TryGetProperty("id", out var idProp)
+                        && idProp.TryGetInt32(out var participantId))
+                    {
+                        return new { id = participantId } as object;
+                    }
+                    return JsonSerializer.Deserialize<object>(participant.GetRawText())!;
+                })
                 .ToArray();
 
             var request = CreateCommunicationRequest(HttpMethod.Post, "/api/channels?type=message", token);
