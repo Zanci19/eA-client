@@ -10,6 +10,7 @@ namespace EAClient.Services
         public static bool PlusEnabled { get; set; }
         public static int StudentId { get; set; }
         public static int UserId { get; set; }
+        public static int CommunicationUserId { get; set; }
         public static string UserType { get; set; } = string.Empty;
 
         public static void Clear()
@@ -22,6 +23,7 @@ namespace EAClient.Services
             PlusEnabled = false;
             StudentId = 0;
             UserId = 0;
+            CommunicationUserId = 0;
             UserType = string.Empty;
         }
     }

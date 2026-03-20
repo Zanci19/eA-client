@@ -99,38 +99,45 @@ namespace EAClient.Pages
 
         private async Task LoadInstitutionAsync()
         {
-            if (_activeInstitutionId > 0)
+            if (_activeInstitutionId > 0 && AuthState.CommunicationUserId > 0)
             {
-                return;
-            }
-
-            var institutions = await EAsistentService.GetCommunicationInstitutionsAsync(AuthState.AccessToken);
-            var first = ExtractDataItems(institutions).FirstOrDefault();
-            if (first.ValueKind == JsonValueKind.Object && first.TryGetProperty("id", out var idValue) && idValue.TryGetInt32(out var institutionId))
-            {
-                _activeInstitutionId = institutionId;
                 return;
             }
 
             var me = await EAsistentService.GetCommunicationMeAsync(AuthState.AccessToken);
             foreach (var user in ExtractDataItems(me))
             {
+                if (AuthState.CommunicationUserId == 0)
+                {
+                    AuthState.CommunicationUserId = GetInt(user, "id", 0);
+                }
+
+                if (_activeInstitutionId > 0)
+                {
+                    break;
+                }
+
                 var nestedInstitutions = GetNested(user, "institutions");
                 if (nestedInstitutions.ValueKind != JsonValueKind.Array)
                     continue;
 
                 foreach (var institution in nestedInstitutions.EnumerateArray())
                 {
-                    if (institution.TryGetProperty("external_id", out var extId) && extId.TryGetInt32(out institutionId))
+                    if (institution.TryGetProperty("external_id", out var extId) && extId.TryGetInt32(out var institutionId))
                     {
                         _activeInstitutionId = institutionId;
-                        return;
+                        break;
                     }
                     if (institution.TryGetProperty("id", out var id) && id.TryGetInt32(out institutionId))
                     {
                         _activeInstitutionId = institutionId;
-                        return;
+                        break;
                     }
+                }
+
+                if (_activeInstitutionId > 0)
+                {
+                    break;
                 }
             }
         }
@@ -216,7 +223,7 @@ namespace EAClient.Pages
 
         private Border BuildMessageBubble(JsonElement message)
         {
-            var mine = GetInt(message, "user_id", -1) == AuthState.UserId || GetBool(message, "mine");
+            var mine = GetInt(message, "user_id", -1) == AuthState.CommunicationUserId || GetBool(message, "mine");
             var files = GetNested(message, "files");
             var border = new Border
             {
@@ -237,23 +244,71 @@ namespace EAClient.Pages
                 FontWeight = FontWeights.Bold,
                 Foreground = mine ? Brushes.White : AppTheme.TextBrush
             });
-            stack.Children.Add(new TextBlock
-            {
-                Text = StripHtml(GetStr(message, "body", string.Empty)),
-                Margin = new Thickness(0, 6, 0, 0),
-                TextWrapping = TextWrapping.Wrap,
-                Foreground = mine ? Brushes.White : AppTheme.TextBrush
-            });
-            if (files.ValueKind == JsonValueKind.Array && files.GetArrayLength() > 0)
+            var bodyText = StripHtml(GetStr(message, "body", string.Empty));
+            if (!string.IsNullOrWhiteSpace(bodyText))
             {
                 stack.Children.Add(new TextBlock
                 {
-                    Text = $"Priponke: {string.Join(", ", files.EnumerateArray().Select(file => GetStr(file, "filename", GetStr(file, "id", "datoteka"))))}",
-                    Margin = new Thickness(0, 8, 0, 0),
+                    Text = bodyText,
+                    Margin = new Thickness(0, 6, 0, 0),
                     TextWrapping = TextWrapping.Wrap,
-                    Foreground = mine ? Brushes.White : AppTheme.SubTextBrush,
-                    FontSize = 12
+                    Foreground = mine ? Brushes.White : AppTheme.TextBrush
                 });
+            }
+            if (files.ValueKind == JsonValueKind.Array && files.GetArrayLength() > 0)
+            {
+                var commToken = EAsistentService.GetCommunicationToken();
+                foreach (var file in files.EnumerateArray())
+                {
+                    var mimeType = GetStr(file, "mime_type", string.Empty);
+                    var fileUrl = GetStr(file, "url", string.Empty);
+                    var fileName = GetStr(file, "filename", GetStr(file, "id", "datoteka"));
+                    if (mimeType.StartsWith("image/") && !string.IsNullOrWhiteSpace(fileUrl) && !string.IsNullOrWhiteSpace(commToken))
+                    {
+                        try
+                        {
+                            // The komunikacija API requires the auth token as a query parameter for file access;
+                            // WPF BitmapImage does not support custom request headers.
+                            var imgUri = new Uri($"{fileUrl}?token={Uri.EscapeDataString(commToken)}");
+                            var bitmap = new System.Windows.Media.Imaging.BitmapImage();
+                            bitmap.BeginInit();
+                            bitmap.UriSource = imgUri;
+                            bitmap.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+                            bitmap.EndInit();
+                            stack.Children.Add(new System.Windows.Controls.Image
+                            {
+                                Source = bitmap,
+                                MaxWidth = 320,
+                                MaxHeight = 320,
+                                Margin = new Thickness(0, 8, 0, 0),
+                                Stretch = System.Windows.Media.Stretch.Uniform,
+                                HorizontalAlignment = HorizontalAlignment.Left
+                            });
+                        }
+                        catch (Exception)
+                        {
+                            stack.Children.Add(new TextBlock
+                            {
+                                Text = $"🖼 {fileName}",
+                                Margin = new Thickness(0, 4, 0, 0),
+                                TextWrapping = TextWrapping.Wrap,
+                                Foreground = mine ? Brushes.White : AppTheme.SubTextBrush,
+                                FontSize = 12
+                            });
+                        }
+                    }
+                    else
+                    {
+                        stack.Children.Add(new TextBlock
+                        {
+                            Text = $"📎 {fileName}",
+                            Margin = new Thickness(0, 4, 0, 0),
+                            TextWrapping = TextWrapping.Wrap,
+                            Foreground = mine ? Brushes.White : AppTheme.SubTextBrush,
+                            FontSize = 12
+                        });
+                    }
+                }
             }
             stack.Children.Add(new TextBlock
             {
@@ -312,15 +367,42 @@ namespace EAClient.Pages
             try
             {
                 await LoadInstitutionAsync();
-                var response = await EAsistentService.SearchCommunicationContactsAsync(AuthState.AccessToken, query, _activeInstitutionId);
-                foreach (var user in ExtractDataItems(response))
+                var response = await EAsistentService.GetCommunicationContactsForInstitutionAsync(AuthState.AccessToken, _activeInstitutionId);
+                var queryLower = query.ToLowerInvariant();
+
+                foreach (var item in ExtractDataItems(response))
                 {
-                    var id = GetStr(user, "id", string.Empty);
-                    if (string.IsNullOrWhiteSpace(id)) continue;
-                    var fullName = GetUserName(user, GetStr(user, "name", "Prejemnik"));
-                    var subtitle = GetStr(user, "title", GetStr(user, "email", string.Empty));
-                    _contactResults.Add((id, fullName, subtitle, user));
-                    ContactResultsList.Items.Add(BuildChannelItem(fullName, string.IsNullOrWhiteSpace(subtitle) ? $"ID: {id}" : subtitle));
+                    // The contacts response has a "groups" array; each group has a "groups" object of subgroups with "members"
+                    var groups = GetNested(item, "groups");
+                    if (groups.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var group in groups.EnumerateArray())
+                        {
+                            var subgroups = GetNested(group, "groups");
+                            if (subgroups.ValueKind != JsonValueKind.Object)
+                                continue;
+
+                            foreach (var subgroupProp in subgroups.EnumerateObject())
+                            {
+                                var members = GetNested(subgroupProp.Value, "members");
+                                if (members.ValueKind != JsonValueKind.Array)
+                                    continue;
+
+                                foreach (var member in members.EnumerateArray())
+                                {
+                                    var id = GetStr(member, "id", string.Empty);
+                                    if (string.IsNullOrWhiteSpace(id))
+                                        continue;
+                                    var fullName = GetUserName(member, GetStr(member, "name", "Prejemnik"));
+                                    if (!fullName.ToLowerInvariant().Contains(queryLower))
+                                        continue;
+                                    var subtitle = GetStr(subgroupProp.Value, "title", string.Empty);
+                                    _contactResults.Add((id, fullName, subtitle, member));
+                                    ContactResultsList.Items.Add(BuildChannelItem(fullName, string.IsNullOrWhiteSpace(subtitle) ? $"ID: {id}" : subtitle));
+                                }
+                            }
+                        }
+                    }
                 }
 
                 NewMessageStatus.Text = _contactResults.Count == 0
@@ -470,8 +552,8 @@ namespace EAClient.Pages
                 button.Foreground = Brushes.White;
                 button.BorderThickness = new Thickness(0);
             }
-            ComposeFloatingButton.Width = 64;
-            ComposeFloatingButton.Height = 64;
+            ComposeFloatingButton.Width = double.NaN;
+            ComposeFloatingButton.Height = double.NaN;
             NewMessageStatus.Foreground = AppTheme.SubTextBrush;
             UpdateTabStyles();
         }
