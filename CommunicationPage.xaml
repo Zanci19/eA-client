@@ -20,7 +20,15 @@
 
             <Border x:Name="ChannelsCard" Grid.Column="0" Padding="18">
                 <DockPanel>
-                    <TextBlock DockPanel.Dock="Top" Text="Pogovori" FontSize="16" FontWeight="Bold" Margin="0,0,0,12"/>
+                    <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+                        <TextBlock x:Name="UnseenBadge" DockPanel.Dock="Right" FontSize="11" VerticalAlignment="Center"/>
+                        <TextBlock Text="Pogovori" FontSize="16" FontWeight="Bold"/>
+                    </DockPanel>
+                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,10">
+                        <Button x:Name="TabMessages"  Content="Sporočila"     Click="TabMessages_Click"  Padding="10,5" Margin="0,0,6,0"/>
+                        <Button x:Name="TabBoard"     Content="Oglasna deska" Click="TabBoard_Click"    Padding="10,5" Margin="0,0,6,0"/>
+                        <Button x:Name="TabSms"       Content="SMS"           Click="TabSms_Click"      Padding="10,5"/>
+                    </StackPanel>
                     <ListBox x:Name="ChannelsList" SelectionChanged="ChannelsList_SelectionChanged" BorderThickness="0"/>
                 </DockPanel>
             </Border>

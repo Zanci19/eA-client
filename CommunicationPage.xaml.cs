@@ -12,10 +12,11 @@ namespace EAClient.Pages
 {
     public partial class CommunicationPage : Page
     {
-        private readonly List<(string Id, string Title, string Subtitle, JsonElement Raw)> _channels = new();
+        private readonly List<(string Id, string Title, string Subtitle, int UnreadCount, JsonElement Raw)> _channels = new();
         private readonly List<(string Id, string Name, string Subtitle, JsonElement Raw)> _contactResults = new();
         private string _selectedChannelId = string.Empty;
         private int _activeInstitutionId;
+        private string _currentChannelType = "message";
 
         public CommunicationPage()
         {
@@ -40,19 +41,20 @@ namespace EAClient.Pages
                 UpdateComposerState();
                 await LoadInstitutionAsync();
 
-                var channelsJson = await EAsistentService.GetMessageChannelsAsync(AuthState.AccessToken, 25);
+                var channelsJson = await EAsistentService.GetChannelsAsync(AuthState.AccessToken, _currentChannelType, 25);
                 foreach (var item in ExtractDataItems(channelsJson))
                 {
                     var id = GetStr(item, "id", string.Empty);
                     if (string.IsNullOrWhiteSpace(id)) continue;
                     var title = GetStr(item, "title", GetUserName(GetNested(item, "user"), "Pogovor"));
                     var subtitle = GetStr(item, "updated_at", string.Empty);
-                    _channels.Add((id, title, subtitle, item));
+                    var unread = GetInt(item, "unread_count", 0);
+                    _channels.Add((id, title, subtitle, unread, item));
                 }
 
                 foreach (var channel in _channels)
                 {
-                    ChannelsList.Items.Add(BuildChannelItem(channel.Title, channel.Subtitle));
+                    ChannelsList.Items.Add(BuildChannelItem(channel.Title, channel.Subtitle, channel.UnreadCount));
                 }
 
                 if (_channels.Count == 0)
@@ -65,6 +67,8 @@ namespace EAClient.Pages
                 }
 
                 ChannelsList.SelectedIndex = 0;
+
+                _ = LoadUnseenCountAsync();
             }
             catch (Exception ex)
             {
@@ -72,6 +76,24 @@ namespace EAClient.Pages
                 ConversationMeta.Text = ex.Message;
                 MessagesPanel.Children.Clear();
                 MessagesPanel.Children.Add(BuildHint("Branje komunikacije ni uspelo. Preveri prijavo ali veljavnost seje."));
+            }
+        }
+
+        private async Task LoadUnseenCountAsync()
+        {
+            try
+            {
+                var countJson = await EAsistentService.GetCommunicationChannelCountAsync(AuthState.AccessToken);
+                var msgCount = GetInt(countJson, "message", 0);
+                var boardCount = GetInt(countJson, "board", 0);
+                var smsCount = GetInt(countJson, "sms", 0);
+                var total = msgCount + boardCount + smsCount;
+                UnseenBadge.Text = total > 0 ? $"● {total} neprebranih" : string.Empty;
+                UnseenBadge.Foreground = total > 0 ? AppTheme.AccentBrush : AppTheme.SubTextBrush;
+            }
+            catch
+            {
+                UnseenBadge.Text = string.Empty;
             }
         }
 
@@ -113,7 +135,7 @@ namespace EAClient.Pages
             }
         }
 
-        private Border BuildChannelItem(string title, string subtitle)
+        private Border BuildChannelItem(string title, string subtitle, int unreadCount = 0)
         {
             var border = new Border
             {
@@ -125,7 +147,22 @@ namespace EAClient.Pages
                 Margin = new Thickness(0, 0, 0, 10)
             };
             var stack = new StackPanel();
-            stack.Children.Add(new TextBlock { Text = title, FontWeight = FontWeights.SemiBold, Foreground = AppTheme.TextBrush, TextWrapping = TextWrapping.Wrap });
+            var headerRow = new DockPanel();
+            if (unreadCount > 0)
+            {
+                var badge = new Border
+                {
+                    Background = AppTheme.AccentBrush,
+                    CornerRadius = new CornerRadius(10),
+                    Padding = new Thickness(6, 1, 6, 1),
+                    Margin = new Thickness(6, 0, 0, 0),
+                    Child = new TextBlock { Text = unreadCount.ToString(), Foreground = Brushes.White, FontSize = 11, FontWeight = FontWeights.Bold }
+                };
+                DockPanel.SetDock(badge, Dock.Right);
+                headerRow.Children.Add(badge);
+            }
+            headerRow.Children.Add(new TextBlock { Text = title, FontWeight = FontWeights.SemiBold, Foreground = AppTheme.TextBrush, TextWrapping = TextWrapping.Wrap });
+            stack.Children.Add(headerRow);
             stack.Children.Add(new TextBlock { Text = subtitle, FontSize = 12, Foreground = AppTheme.SubTextBrush, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0) });
             border.Child = stack;
             return border;
@@ -308,6 +345,28 @@ namespace EAClient.Pages
             NewMessageStatus.Text = $"Izbran prejemnik: {selected.Name}";
         }
 
+        private async void TabMessages_Click(object sender, RoutedEventArgs e) => await SwitchChannelTypeAsync("message");
+        private async void TabBoard_Click(object sender, RoutedEventArgs e) => await SwitchChannelTypeAsync("board");
+        private async void TabSms_Click(object sender, RoutedEventArgs e) => await SwitchChannelTypeAsync("sms");
+
+        private async Task SwitchChannelTypeAsync(string channelType)
+        {
+            if (_currentChannelType == channelType) return;
+            _currentChannelType = channelType;
+            UpdateTabStyles();
+            await LoadChannelsAsync();
+        }
+
+        private void UpdateTabStyles()
+        {
+            foreach (var (btn, type) in new[] { (TabMessages, "message"), (TabBoard, "board"), (TabSms, "sms") })
+            {
+                btn.Background = _currentChannelType == type ? AppTheme.AccentBrush : AppTheme.CardBrush;
+                btn.Foreground = _currentChannelType == type ? Brushes.White : AppTheme.TextBrush;
+                btn.BorderThickness = new Thickness(0);
+            }
+        }
+
         private async void SendNewMessageButton_Click(object sender, RoutedEventArgs e)
         {
             if (ContactResultsList.SelectedIndex < 0 || ContactResultsList.SelectedIndex >= _contactResults.Count)
@@ -414,6 +473,7 @@ namespace EAClient.Pages
             ComposeFloatingButton.Width = 64;
             ComposeFloatingButton.Height = 64;
             NewMessageStatus.Foreground = AppTheme.SubTextBrush;
+            UpdateTabStyles();
         }
 
         private static IEnumerable<JsonElement> ExtractDataItems(JsonElement root)
