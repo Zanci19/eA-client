@@ -42,6 +42,10 @@ namespace EAClient.Services
                 DataProtectionScope.CurrentUser);
 
             Directory.CreateDirectory(DirectoryPath);
+            if (File.Exists(FilePath))
+            {
+                File.SetAttributes(FilePath, FileAttributes.Normal);
+            }
             File.WriteAllBytes(FilePath, encrypted);
 
             try
