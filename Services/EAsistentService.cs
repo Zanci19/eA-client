@@ -294,39 +294,80 @@ namespace EAClient.Services
 
         public static async Task<JsonElement> SendChannelMessageWithFileAsync(string token, string channelId, string message, string filePath)
         {
-            var request = CreateCommunicationRequest(HttpMethod.Post, $"/api/channels/{channelId}/messages", token);
-            var multipart = new MultipartFormDataContent();
-            multipart.Add(new StringContent(channelId), "channel_id");
-            multipart.Add(new StringContent(WrapHtml(message)), "body");
-            multipart.Add(new StringContent($"https://komunikacija.easistent.com/inbox/messages/{channelId}"), "page_url");
+            var fileIds = new List<string>();
             if (!string.IsNullOrWhiteSpace(filePath) && System.IO.File.Exists(filePath))
             {
-                var fileName = System.IO.Path.GetFileName(filePath);
-                var fileBytes = await System.IO.File.ReadAllBytesAsync(filePath);
-                var fileContent = new ByteArrayContent(fileBytes);
-                fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(GetMimeType(fileName));
-                multipart.Add(fileContent, "files[]", fileName);
+                var fileId = await UploadCommunicationFileAsync(token, filePath);
+                if (!string.IsNullOrWhiteSpace(fileId))
+                {
+                    fileIds.Add(fileId);
+                }
             }
-            request.Content = multipart;
+
+            var request = CreateCommunicationRequest(HttpMethod.Post, $"/api/channels/{channelId}/messages", token);
+            request.Content = new StringContent(JsonSerializer.Serialize(new
+            {
+                channel_id = channelId,
+                body = WrapHtml(message),
+                files = fileIds,
+                page_url = $"https://komunikacija.easistent.com/inbox/messages/{channelId}"
+            }, _jsonOptions), Encoding.UTF8, "application/json");
             return await SendCommunicationJsonAsync(request);
         }
 
-        private static string GetMimeType(string fileName)
+        private static async Task<string> UploadCommunicationFileAsync(string token, string filePath)
         {
-            var ext = System.IO.Path.GetExtension(fileName).ToLowerInvariant();
-            return ext switch
+            if (string.IsNullOrWhiteSpace(_communicationToken) && !string.IsNullOrWhiteSpace(AuthState.AccessToken))
             {
-                ".jpg" or ".jpeg" => "image/jpeg",
-                ".png" => "image/png",
-                ".gif" => "image/gif",
-                ".webp" => "image/webp",
-                ".pdf" => "application/pdf",
-                ".doc" => "application/msword",
-                ".docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                ".xls" => "application/vnd.ms-excel",
-                ".xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                _ => "application/octet-stream"
-            };
+                await AcquireCommunicationTokenAsync(AuthState.AccessToken);
+            }
+
+            var fileName = System.IO.Path.GetFileName(filePath);
+            var fileBytes = await System.IO.File.ReadAllBytesAsync(filePath);
+
+            HttpRequestMessage BuildRequest(string? requestToken)
+            {
+                var req = CreateCommunicationRequest(HttpMethod.Post, "/api/files", requestToken);
+                req.Headers.TryAddWithoutValidation("x-filename", fileName);
+                req.Headers.TryAddWithoutValidation("x-requested-with", "XMLHttpRequest");
+                var content = new ByteArrayContent(fileBytes);
+                content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("text/plain");
+                req.Content = content;
+                return req;
+            }
+
+            var request = BuildRequest(token);
+            var response = await _communicationClient.SendAsync(request);
+            UpdateCommunicationToken(response);
+
+            if (response.StatusCode == HttpStatusCode.Unauthorized && !string.IsNullOrWhiteSpace(AuthState.AccessToken))
+            {
+                _communicationToken = string.Empty;
+                await AcquireCommunicationTokenAsync(AuthState.AccessToken);
+
+                using var retryRequest = BuildRequest(_communicationToken);
+                response = await _communicationClient.SendAsync(retryRequest);
+                UpdateCommunicationToken(response);
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var errJson = await response.Content.ReadAsStringAsync();
+                throw new Exception($"Napaka pri nalaganju datoteke ({(int)response.StatusCode}): {TryGetErrorMessage(errJson)}");
+            }
+
+            var json = await response.Content.ReadAsStringAsync();
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            if (root.ValueKind == JsonValueKind.Array && root.GetArrayLength() > 0)
+            {
+                var data = root[0].GetProperty("data");
+                if (data.TryGetProperty("id", out var idProp))
+                {
+                    return idProp.GetString() ?? string.Empty;
+                }
+            }
+            return string.Empty;
         }
 
         public static async Task<JsonElement> GetChannelsAsync(string token, string channelType = "message", int limit = 20, string? to = null)
