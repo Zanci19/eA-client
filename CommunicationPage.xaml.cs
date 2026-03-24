@@ -248,8 +248,12 @@ namespace EAClient.Pages
             }
             else
             {
-                bgBrush = AppTheme.IsSleek ? new SolidColorBrush(Color.FromArgb(25, 0, 102, 204)) : AppTheme.CardBrush;
-                borderBrush = AppTheme.BorderBrush;
+                bgBrush = AppTheme.IsDark
+                    ? new SolidColorBrush(Color.FromArgb(80, 60, 120, 200))
+                    : new SolidColorBrush(Color.FromRgb(230, 240, 255));
+                borderBrush = AppTheme.IsDark
+                    ? new SolidColorBrush(Color.FromArgb(120, 80, 140, 220))
+                    : new SolidColorBrush(Color.FromRgb(180, 210, 245));
                 alignment = HorizontalAlignment.Left;
             }
 
@@ -272,7 +276,9 @@ namespace EAClient.Pages
                 {
                     Text = GetUserName(GetNested(message, "user"), mine ? "Jaz" : "Pošiljatelj"),
                     FontWeight = FontWeights.Bold,
-                    Foreground = mine ? Brushes.White : AppTheme.TextBrush
+                    Foreground = mine ? Brushes.White : AppTheme.SubTextBrush,
+                    FontSize = 12,
+                    Margin = new Thickness(0, 0, 0, 2)
                 });
             }
             var bodyText = StripHtml(GetStr(message, "body", string.Empty));
@@ -281,7 +287,7 @@ namespace EAClient.Pages
                 stack.Children.Add(new TextBlock
                 {
                     Text = bodyText,
-                    Margin = new Thickness(0, isSystem ? 0 : 6, 0, 0),
+                    Margin = new Thickness(0, isSystem ? 0 : 4, 0, 0),
                     TextWrapping = TextWrapping.Wrap,
                     TextAlignment = isSystem ? TextAlignment.Center : TextAlignment.Left,
                     FontStyle = isSystem ? FontStyles.Italic : FontStyles.Normal,
@@ -403,7 +409,7 @@ namespace EAClient.Pages
             var dialog = new Microsoft.Win32.OpenFileDialog
             {
                 Title = "Izberi datoteko za pošiljanje",
-                Filter = "Vse datoteke (*.*)|*.*|Slike (*.jpg;*.jpeg;*.png;*.gif;*.webp)|*.jpg;*.jpeg;*.png;*.gif;*.webp|Dokumenti (*.pdf;*.doc;*.docx)|*.pdf;*.doc;*.docx"
+                Filter = "Podprte datoteke (*.jpg;*.jpeg;*.png;*.gif;*.webp;*.doc;*.docx;*.xls;*.xlsx;*.ppt;*.pptx)|*.jpg;*.jpeg;*.png;*.gif;*.webp;*.doc;*.docx;*.xls;*.xlsx;*.ppt;*.pptx|Slike (*.jpg;*.jpeg;*.png;*.gif;*.webp)|*.jpg;*.jpeg;*.png;*.gif;*.webp|Office dokumenti (*.doc;*.docx;*.xls;*.xlsx;*.ppt;*.pptx)|*.doc;*.docx;*.xls;*.xlsx;*.ppt;*.pptx"
             };
 
             if (dialog.ShowDialog() != true) return;
