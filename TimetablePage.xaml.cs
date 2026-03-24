@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -19,11 +20,34 @@ namespace EAClient.Pages
             InitializeComponent();
             _currentMonday = GetMonday(DateTime.Today);
             Loaded += TimetablePage_Loaded;
+            Unloaded += TimetablePage_Unloaded;
+            PreferencesService.PreferencesChanged += OnPreferencesChanged;
         }
 
         private async void TimetablePage_Loaded(object sender, RoutedEventArgs e)
         {
+            ApplyTheme();
             await LoadWeekAsync();
+        }
+
+        private void TimetablePage_Unloaded(object sender, RoutedEventArgs e)
+        {
+            PreferencesService.PreferencesChanged -= OnPreferencesChanged;
+        }
+
+        private void OnPreferencesChanged(UserPreferences _)
+        {
+            Dispatcher.Invoke(ApplyTheme);
+        }
+
+        private void ApplyTheme()
+        {
+            RootGrid.Background = AppTheme.BgBrush;
+            TitleBar.Background = AppTheme.TitleBarBrush;
+            WeekNavBar.Background = AppTheme.CardBrush;
+            WeekNavBar.BorderBrush = AppTheme.BorderBrush;
+            WeekLabel.Foreground = AppTheme.TextBrush;
+            FontFamily = new FontFamily(AppTheme.FontFamily);
         }
 
         private static DateTime GetMonday(DateTime date)
@@ -40,8 +64,17 @@ namespace EAClient.Pages
             try
             {
                 var to = _currentMonday.AddDays(4);
-                var events = await EAsistentService.GetTimetableAsync(AuthState.AccessToken, _currentMonday, to);
-                BuildTimetableGrid(events, _currentMonday);
+                var eventsTask = EAsistentService.GetTimetableAsync(AuthState.AccessToken, _currentMonday, to);
+                List<(string Date, string Subject, string Type, string Name)> evaluations = new();
+                try
+                {
+                    var evalJson = await EAsistentService.GetEvaluationsRangeAsync(AuthState.AccessToken, _currentMonday, to);
+                    evaluations = ParseEvaluations(evalJson, _currentMonday, to);
+                }
+                catch { /* evaluations are optional */ }
+
+                var events = await eventsTask;
+                BuildTimetableGrid(events, _currentMonday, evaluations);
                 ShowContent();
             }
             catch (Exception ex)
@@ -50,25 +83,62 @@ namespace EAClient.Pages
             }
         }
 
+        private static List<(string Date, string Subject, string Type, string Name)> ParseEvaluations(JsonElement json, DateTime from, DateTime to)
+        {
+            var result = new List<(string, string, string, string)>();
+            JsonElement arr = default;
+
+            if (json.TryGetProperty("evaluations", out var ev) && ev.ValueKind == JsonValueKind.Array)
+                arr = ev;
+            else if (json.ValueKind == JsonValueKind.Array)
+                arr = json;
+
+            if (arr.ValueKind != JsonValueKind.Array) return result;
+
+            foreach (var item in arr.EnumerateArray())
+            {
+                var dateStr = GetStrEval(item, "date", string.Empty);
+                if (!DateTime.TryParse(dateStr, out var dateVal)) continue;
+                if (dateVal.Date < from.Date || dateVal.Date > to.Date) continue;
+
+                var subject = GetStrEval(item, "subject", GetStrEval(item, "subject_name", "Test"));
+                var type = GetStrEval(item, "type", GetStrEval(item, "kind", string.Empty));
+                var name = GetStrEval(item, "name", GetStrEval(item, "description", GetStrEval(item, "title", string.Empty)));
+                result.Add((dateStr, subject, type, name));
+            }
+
+            return result;
+        }
+
+        private static string GetStrEval(JsonElement el, string prop, string fallback)
+        {
+            if (el.TryGetProperty(prop, out var v) && v.ValueKind == JsonValueKind.String)
+                return v.GetString() ?? fallback;
+            return fallback;
+        }
+
         private void UpdateWeekLabel()
         {
             var to = _currentMonday.AddDays(4);
             WeekLabel.Text = $"{_currentMonday:dd.MM.yyyy}  –  {to:dd.MM.yyyy}";
         }
 
-        private void BuildTimetableGrid(List<TimetableEvent> events, DateTime monday)
+        private void BuildTimetableGrid(List<TimetableEvent> events, DateTime monday,
+            List<(string Date, string Subject, string Type, string Name)> evaluations)
         {
             TimetableGrid.Children.Clear();
             TimetableGrid.RowDefinitions.Clear();
             TimetableGrid.ColumnDefinitions.Clear();
 
-            if (!events.Any())
+            bool hasEvaluations = evaluations.Any();
+
+            if (!events.Any() && !hasEvaluations)
             {
                 TimetableGrid.Children.Add(new TextBlock
                 {
                     Text = "Ta teden ni pouka.",
                     FontSize = 16,
-                    Foreground = Brushes.Gray,
+                    Foreground = AppTheme.SubTextBrush,
                     HorizontalAlignment = HorizontalAlignment.Center,
                     VerticalAlignment = VerticalAlignment.Center,
                     Margin = new Thickness(20)
@@ -92,9 +162,12 @@ namespace EAClient.Pages
             for (int d = 0; d < 5; d++)
                 TimetableGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 150 });
 
+            // Row 0: headers; rows 1..n: time slots; row n+1 (optional): evaluations
             TimetableGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(AppTheme.IsSleek ? 58 : 46) });
             foreach (var _ in timeSlots)
                 TimetableGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(AppTheme.IsSleek ? 88 : 68) });
+            if (hasEvaluations)
+                TimetableGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
             var corner = new Border
             {
@@ -147,18 +220,20 @@ namespace EAClient.Pages
 
                 var timeBorder = new Border
                 {
-                    Background = AppTheme.IsSleek ? new SolidColorBrush(Color.FromRgb(250, 251, 253)) : new SolidColorBrush(Color.FromRgb(245, 247, 250)),
-                    BorderBrush = new SolidColorBrush(Color.FromRgb(220, 225, 235)),
+                    Background = AppTheme.IsDark
+                        ? new SolidColorBrush(Color.FromRgb(35, 42, 58))
+                        : (AppTheme.IsSleek ? new SolidColorBrush(Color.FromRgb(250, 251, 253)) : new SolidColorBrush(Color.FromRgb(245, 247, 250))),
+                    BorderBrush = AppTheme.IsDark ? AppTheme.BorderBrush : new SolidColorBrush(Color.FromRgb(220, 225, 235)),
                     BorderThickness = new Thickness(1),
                     CornerRadius = new CornerRadius(cellCornerRadius),
-                    Margin = new Thickness(0, 0, cellSpacing, row == timeSlots.Count ? 0 : cellSpacing),
+                    Margin = new Thickness(0, 0, cellSpacing, row == timeSlots.Count && !hasEvaluations ? 0 : cellSpacing),
                     Padding = new Thickness(8)
                 };
                 timeBorder.Child = new TextBlock
                 {
                     Text = $"{from}\n{to}",
                     FontSize = 11,
-                    Foreground = Brushes.Gray,
+                    Foreground = AppTheme.SubTextBrush,
                     TextAlignment = TextAlignment.Center,
                     VerticalAlignment = VerticalAlignment.Center,
                     HorizontalAlignment = HorizontalAlignment.Center
@@ -176,18 +251,20 @@ namespace EAClient.Pages
                     var ev = events.FirstOrDefault(e => e.Date == dateStr && e.From == from);
 
                     Color cellBg = isCurrent
-                        ? Color.FromRgb(255, 247, 221)
+                        ? (AppTheme.IsDark ? Color.FromRgb(80, 64, 20) : Color.FromRgb(255, 247, 221))
                         : isToday
-                            ? Color.FromRgb(241, 247, 255)
-                            : AppTheme.IsSleek ? Color.FromRgb(252, 253, 255) : Colors.White;
+                            ? (AppTheme.IsDark ? Color.FromRgb(20, 40, 70) : Color.FromRgb(241, 247, 255))
+                            : AppTheme.IsDark
+                                ? Color.FromRgb(28, 35, 51)
+                                : (AppTheme.IsSleek ? Color.FromRgb(252, 253, 255) : Colors.White);
 
                     var cell = new Border
                     {
                         Background = new SolidColorBrush(cellBg),
-                        BorderBrush = new SolidColorBrush(Color.FromRgb(228, 232, 240)),
+                        BorderBrush = AppTheme.IsDark ? AppTheme.BorderBrush : new SolidColorBrush(Color.FromRgb(228, 232, 240)),
                         BorderThickness = new Thickness(1),
                         CornerRadius = new CornerRadius(cellCornerRadius),
-                        Margin = new Thickness(0, 0, d == 4 ? 0 : cellSpacing, row == timeSlots.Count ? 0 : cellSpacing),
+                        Margin = new Thickness(0, 0, d == 4 ? 0 : cellSpacing, row == timeSlots.Count && !hasEvaluations ? 0 : cellSpacing),
                         Padding = new Thickness(AppTheme.IsSleek ? 8 : 6)
                     };
 
@@ -217,16 +294,16 @@ namespace EAClient.Pages
                         if (!string.IsNullOrEmpty(ev.Classroom))
                             sp.Children.Add(new TextBlock
                             {
-                                Text = $"📍 {ev.Classroom}",
+                                Text = ev.Classroom,
                                 FontSize = 10,
-                                Foreground = Brushes.Gray
+                                Foreground = AppTheme.SubTextBrush
                             });
                         if (ev.Teachers.Any())
                             sp.Children.Add(new TextBlock
                             {
                                 Text = ev.Teachers[0],
                                 FontSize = 10,
-                                Foreground = Brushes.Gray,
+                                Foreground = AppTheme.SubTextBrush,
                                 TextTrimming = TextTrimming.CharacterEllipsis
                             });
                         evBorder.Child = sp;
@@ -236,6 +313,84 @@ namespace EAClient.Pages
                     Grid.SetRow(cell, row);
                     Grid.SetColumn(cell, d + 1);
                     TimetableGrid.Children.Add(cell);
+                }
+            }
+
+            // Evaluations/tests row
+            if (hasEvaluations)
+            {
+                int evalRow = timeSlots.Count + 1;
+
+                // Label cell
+                var labelBorder = new Border
+                {
+                    Background = AppTheme.IsDark ? new SolidColorBrush(Color.FromRgb(35, 42, 58)) : new SolidColorBrush(Color.FromRgb(245, 247, 250)),
+                    BorderBrush = AppTheme.IsDark ? AppTheme.BorderBrush : new SolidColorBrush(Color.FromRgb(220, 225, 235)),
+                    BorderThickness = new Thickness(1),
+                    CornerRadius = new CornerRadius(cellCornerRadius),
+                    Margin = new Thickness(0, 0, cellSpacing, 0),
+                    Padding = new Thickness(8)
+                };
+                labelBorder.Child = new TextBlock
+                {
+                    Text = "Testi",
+                    FontSize = 11,
+                    FontWeight = FontWeights.SemiBold,
+                    Foreground = AppTheme.SubTextBrush,
+                    TextAlignment = TextAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    HorizontalAlignment = HorizontalAlignment.Center
+                };
+                Grid.SetRow(labelBorder, evalRow);
+                Grid.SetColumn(labelBorder, 0);
+                TimetableGrid.Children.Add(labelBorder);
+
+                for (int d = 0; d < 5; d++)
+                {
+                    var date = monday.AddDays(d);
+                    var dateStr = date.ToString("yyyy-MM-dd");
+                    var dayEvals = evaluations.Where(e => e.Date.StartsWith(dateStr)).ToList();
+
+                    var evalCell = new Border
+                    {
+                        Background = dayEvals.Any()
+                            ? (AppTheme.IsDark ? new SolidColorBrush(Color.FromRgb(60, 30, 10)) : new SolidColorBrush(Color.FromRgb(255, 245, 230)))
+                            : (AppTheme.IsDark ? new SolidColorBrush(Color.FromRgb(28, 35, 51)) : new SolidColorBrush(Colors.White)),
+                        BorderBrush = dayEvals.Any()
+                            ? new SolidColorBrush(Color.FromRgb(220, 120, 0))
+                            : (AppTheme.IsDark ? AppTheme.BorderBrush : new SolidColorBrush(Color.FromRgb(228, 232, 240))),
+                        BorderThickness = new Thickness(dayEvals.Any() ? 2 : 1),
+                        CornerRadius = new CornerRadius(cellCornerRadius),
+                        Margin = new Thickness(0, 0, d == 4 ? 0 : cellSpacing, 0),
+                        Padding = new Thickness(AppTheme.IsSleek ? 8 : 6),
+                        MinHeight = 40
+                    };
+
+                    if (dayEvals.Any())
+                    {
+                        var sp = new StackPanel();
+                        foreach (var (_, subject, type, name) in dayEvals)
+                        {
+                            var label = string.IsNullOrWhiteSpace(name) ? subject : $"{subject}: {name}";
+                            if (!string.IsNullOrWhiteSpace(type)) label = $"[{type}] {label}";
+                            sp.Children.Add(new TextBlock
+                            {
+                                Text = label,
+                                FontSize = 11,
+                                FontWeight = FontWeights.SemiBold,
+                                Foreground = AppTheme.IsDark
+                                    ? new SolidColorBrush(Color.FromRgb(255, 160, 60))
+                                    : new SolidColorBrush(Color.FromRgb(200, 100, 0)),
+                                TextWrapping = TextWrapping.Wrap,
+                                Margin = new Thickness(0, 0, 0, 2)
+                            });
+                        }
+                        evalCell.Child = sp;
+                    }
+
+                    Grid.SetRow(evalCell, evalRow);
+                    Grid.SetColumn(evalCell, d + 1);
+                    TimetableGrid.Children.Add(evalCell);
                 }
             }
         }

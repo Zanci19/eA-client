@@ -3,7 +3,7 @@
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       FontFamily="Arial">
 
-    <Grid x:Name="RootGrid" Background="#F5F7FA">
+    <Grid x:Name="RootGrid">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
@@ -15,53 +15,53 @@
 
         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="24">
             <StackPanel x:Name="ContentStack" MaxWidth="680">
-                <TextBlock Text="Videz aplikacije" FontSize="16" FontWeight="Bold" Foreground="#1C2333" Margin="0,0,0,14"/>
+                <TextBlock x:Name="TbAppearanceHeader" Text="Videz aplikacije" FontSize="16" FontWeight="Bold" Foreground="#1C2333" Margin="0,0,0,14"/>
                 <Border x:Name="ThemeCard" Background="White" CornerRadius="12" BorderBrush="#E4E8F0" BorderThickness="1" Padding="20" Margin="0,0,0,16">
                     <StackPanel>
-                        <TextBlock Text="Način izkušnje" FontSize="14" FontWeight="Bold" Foreground="#333" Margin="0,0,0,12"/>
+                        <TextBlock x:Name="TbExperienceLabel" Text="Način izkušnje" FontSize="14" FontWeight="Bold" Foreground="#333" Margin="0,0,0,12"/>
                         <StackPanel Orientation="Horizontal">
                             <RadioButton x:Name="RbFormal" Content="Formalni  " GroupName="Theme" FontSize="13" Margin="0,0,16,0" Checked="Theme_Changed"/>
                             <RadioButton x:Name="RbSleek" Content="Sleek" GroupName="Theme" FontSize="13" Checked="Theme_Changed"/>
                         </StackPanel>
-                        <TextBlock Text="Formalni ostane resen, sleek pa doda več barve, več zaobljenosti in bolj igriv ton." FontSize="12" Foreground="#666" Margin="0,8,0,0" TextWrapping="Wrap"/>
+                        <TextBlock x:Name="TbExperienceHint" Text="Formalni ostane resen, sleek pa doda več barve, več zaobljenosti in bolj igriv ton." FontSize="12" Foreground="#666" Margin="0,8,0,0" TextWrapping="Wrap"/>
 
-                        <Border Height="1" Background="#F0F0F0" Margin="0,14,0,14"/>
+                        <Border x:Name="DividerA" Height="1" Background="#F0F0F0" Margin="0,14,0,14"/>
 
-                        <TextBlock Text="Način prikaza" FontSize="14" FontWeight="Bold" Foreground="#333" Margin="0,0,0,12"/>
+                        <TextBlock x:Name="TbThemeLabel" Text="Način prikaza" FontSize="14" FontWeight="Bold" Foreground="#333" Margin="0,0,0,12"/>
                         <StackPanel Orientation="Horizontal">
                             <RadioButton x:Name="RbLight" Content="Svetel  " GroupName="DarkMode" FontSize="13" Margin="0,0,16,0" Checked="DarkMode_Changed"/>
                             <RadioButton x:Name="RbDark" Content="Temen" GroupName="DarkMode" FontSize="13" Checked="DarkMode_Changed"/>
                         </StackPanel>
 
-                        <Border Height="1" Background="#F0F0F0" Margin="0,14,0,14"/>
+                        <Border x:Name="DividerB" Height="1" Background="#F0F0F0" Margin="0,14,0,14"/>
 
                         <DockPanel>
                             <StackPanel DockPanel.Dock="Left">
-                                <TextBlock Text="Animacije" FontSize="14" FontWeight="Bold" Foreground="#333"/>
-                                <TextBlock Text="Nežni prehodi in pojavljanje kartic po aplikaciji" FontSize="12" Foreground="#666" Margin="0,4,0,0"/>
+                                <TextBlock x:Name="TbAnimLabel" Text="Animacije" FontSize="14" FontWeight="Bold" Foreground="#333"/>
+                                <TextBlock x:Name="TbAnimHint" Text="Nežni prehodi in pojavljanje kartic po aplikaciji" FontSize="12" Foreground="#666" Margin="0,4,0,0"/>
                             </StackPanel>
                             <CheckBox x:Name="CbAnimations" HorizontalAlignment="Right" Checked="Anim_Changed" Unchecked="Anim_Changed"/>
                         </DockPanel>
                     </StackPanel>
                 </Border>
 
-                <TextBlock Text="Račun" FontSize="16" FontWeight="Bold" Foreground="#1C2333" Margin="0,8,0,14"/>
+                <TextBlock x:Name="TbAccountHeader" Text="Račun" FontSize="16" FontWeight="Bold" Foreground="#1C2333" Margin="0,8,0,14"/>
                 <Border x:Name="AccountCard" Background="White" CornerRadius="12" BorderBrush="#E4E8F0" BorderThickness="1" Padding="20" Margin="0,0,0,16">
                     <StackPanel>
                         <DockPanel Margin="0,0,0,14">
                             <StackPanel DockPanel.Dock="Left">
-                                <TextBlock Text="Samodejna prijava" FontSize="14" FontWeight="Bold" Foreground="#333"/>
+                                <TextBlock x:Name="TbAutoLoginLabel" Text="Samodejna prijava" FontSize="14" FontWeight="Bold" Foreground="#333"/>
                                 <TextBlock x:Name="SavedCredText" FontSize="12" Foreground="#666" Margin="0,4,0,0" TextWrapping="Wrap"/>
                             </StackPanel>
                             <CheckBox x:Name="CbAutoLogin" VerticalAlignment="Center" Checked="AutoLogin_Changed" Unchecked="AutoLogin_Changed"/>
                         </DockPanel>
 
-                        <Border Height="1" Background="#F0F0F0" Margin="0,0,0,14"/>
+                        <Border x:Name="DividerC" Height="1" Background="#F0F0F0" Margin="0,0,0,14"/>
 
                         <DockPanel>
                             <StackPanel DockPanel.Dock="Left">
-                                <TextBlock Text="Izbris shranjene seje" FontSize="14" FontWeight="Bold" Foreground="#333"/>
-                                <TextBlock Text="Ob odjavi ali ročnem izbrisu se šifrirana seja prepiše in odstrani iz diska." FontSize="12" Foreground="#666" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                                <TextBlock x:Name="TbDeleteLabel" Text="Izbris shranjene seje" FontSize="14" FontWeight="Bold" Foreground="#333"/>
+                                <TextBlock x:Name="TbDeleteHint" Text="Ob odjavi ali ročnem izbrisu se šifrirana seja prepiše in odstrani iz diska." FontSize="12" Foreground="#666" Margin="0,4,0,0" TextWrapping="Wrap"/>
                             </StackPanel>
                             <Button x:Name="BtnDeleteCred" Content="Izbriši" HorizontalAlignment="Right" VerticalAlignment="Center" Padding="14,7" Cursor="Hand" Click="DeleteCred_Click">
                                 <Button.Style>

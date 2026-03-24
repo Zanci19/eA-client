@@ -223,35 +223,68 @@ namespace EAClient.Pages
 
         private Border BuildMessageBubble(JsonElement message)
         {
-            var mine = GetInt(message, "user_id", -1) == AuthState.CommunicationUserId || GetBool(message, "mine");
+            var isSystem = GetStr(message, "type", string.Empty).Equals("system", StringComparison.OrdinalIgnoreCase)
+                           || GetBool(message, "is_system")
+                           || (GetInt(message, "user_id", -1) == 0 && !GetBool(message, "mine"));
+            var mine = !isSystem && (GetInt(message, "user_id", -1) == AuthState.CommunicationUserId || GetBool(message, "mine"));
             var files = GetNested(message, "files");
+
+            SolidColorBrush bgBrush;
+            SolidColorBrush borderBrush;
+            HorizontalAlignment alignment;
+            if (isSystem)
+            {
+                bgBrush = AppTheme.IsDark
+                    ? new SolidColorBrush(Color.FromArgb(60, 140, 155, 180))
+                    : new SolidColorBrush(Color.FromRgb(240, 240, 245));
+                borderBrush = AppTheme.BorderBrush;
+                alignment = HorizontalAlignment.Center;
+            }
+            else if (mine)
+            {
+                bgBrush = AppTheme.AccentBrush;
+                borderBrush = AppTheme.AccentBrush;
+                alignment = HorizontalAlignment.Right;
+            }
+            else
+            {
+                bgBrush = AppTheme.IsSleek ? new SolidColorBrush(Color.FromArgb(25, 0, 102, 204)) : AppTheme.CardBrush;
+                borderBrush = AppTheme.BorderBrush;
+                alignment = HorizontalAlignment.Left;
+            }
+
             var border = new Border
             {
-                HorizontalAlignment = mine ? HorizontalAlignment.Right : HorizontalAlignment.Left,
-                Background = mine ? AppTheme.AccentBrush : (AppTheme.IsSleek ? new SolidColorBrush(Color.FromArgb(25, 0, 102, 204)) : AppTheme.CardBrush),
-                BorderBrush = mine ? AppTheme.AccentBrush : AppTheme.BorderBrush,
+                HorizontalAlignment = alignment,
+                Background = bgBrush,
+                BorderBrush = borderBrush,
                 BorderThickness = new Thickness(1),
                 CornerRadius = new CornerRadius(AppTheme.CardCornerRadius),
                 Padding = new Thickness(14),
                 Margin = new Thickness(0, 0, 0, 10),
-                MaxWidth = 540
+                MaxWidth = isSystem ? 480 : 540
             };
 
             var stack = new StackPanel();
-            stack.Children.Add(new TextBlock
+            if (!isSystem)
             {
-                Text = GetUserName(GetNested(message, "user"), mine ? "Jaz" : "Pošiljatelj"),
-                FontWeight = FontWeights.Bold,
-                Foreground = mine ? Brushes.White : AppTheme.TextBrush
-            });
+                stack.Children.Add(new TextBlock
+                {
+                    Text = GetUserName(GetNested(message, "user"), mine ? "Jaz" : "Pošiljatelj"),
+                    FontWeight = FontWeights.Bold,
+                    Foreground = mine ? Brushes.White : AppTheme.TextBrush
+                });
+            }
             var bodyText = StripHtml(GetStr(message, "body", string.Empty));
             if (!string.IsNullOrWhiteSpace(bodyText))
             {
                 stack.Children.Add(new TextBlock
                 {
                     Text = bodyText,
-                    Margin = new Thickness(0, 6, 0, 0),
+                    Margin = new Thickness(0, isSystem ? 0 : 6, 0, 0),
                     TextWrapping = TextWrapping.Wrap,
+                    TextAlignment = isSystem ? TextAlignment.Center : TextAlignment.Left,
+                    FontStyle = isSystem ? FontStyles.Italic : FontStyles.Normal,
                     Foreground = mine ? Brushes.White : AppTheme.TextBrush
                 });
             }
@@ -275,15 +308,18 @@ namespace EAClient.Pages
                             bitmap.UriSource = imgUri;
                             bitmap.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
                             bitmap.EndInit();
-                            stack.Children.Add(new System.Windows.Controls.Image
+                            var img = new System.Windows.Controls.Image
                             {
                                 Source = bitmap,
                                 MaxWidth = 320,
                                 MaxHeight = 320,
                                 Margin = new Thickness(0, 8, 0, 0),
                                 Stretch = System.Windows.Media.Stretch.Uniform,
-                                HorizontalAlignment = HorizontalAlignment.Left
-                            });
+                                HorizontalAlignment = HorizontalAlignment.Left,
+                                Cursor = System.Windows.Input.Cursors.Hand
+                            };
+                            img.MouseDown += (_, _) => OpenImageViewer(bitmap);
+                            stack.Children.Add(img);
                         }
                         catch (Exception)
                         {
@@ -315,10 +351,22 @@ namespace EAClient.Pages
                 Text = GetStr(message, "created_at", string.Empty),
                 Margin = new Thickness(0, 8, 0, 0),
                 FontSize = 11,
+                TextAlignment = isSystem ? TextAlignment.Center : TextAlignment.Left,
                 Foreground = mine ? new SolidColorBrush(Color.FromArgb(220, 255, 255, 255)) : AppTheme.SubTextBrush
             });
             border.Child = stack;
             return border;
+        }
+
+        private void OpenImageViewer(System.Windows.Media.Imaging.BitmapImage bitmap)
+        {
+            ImageViewerImage.Source = bitmap;
+            ImageViewerOverlay.Visibility = Visibility.Visible;
+        }
+
+        private void ImageViewerOverlay_MouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            ImageViewerOverlay.Visibility = Visibility.Collapsed;
         }
 
         private TextBlock BuildHint(string text)
@@ -343,6 +391,39 @@ namespace EAClient.Pages
             }
             finally
             {
+                SendButton.IsEnabled = !string.IsNullOrWhiteSpace(_selectedChannelId);
+            }
+        }
+
+        private async void AttachButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (string.IsNullOrWhiteSpace(_selectedChannelId))
+                return;
+
+            var dialog = new Microsoft.Win32.OpenFileDialog
+            {
+                Title = "Izberi datoteko za pošiljanje",
+                Filter = "Vse datoteke (*.*)|*.*|Slike (*.jpg;*.jpeg;*.png;*.gif;*.webp)|*.jpg;*.jpeg;*.png;*.gif;*.webp|Dokumenti (*.pdf;*.doc;*.docx)|*.pdf;*.doc;*.docx"
+            };
+
+            if (dialog.ShowDialog() != true) return;
+
+            AttachButton.IsEnabled = false;
+            SendButton.IsEnabled = false;
+            try
+            {
+                var text = MessageInput.Text.Trim();
+                await EAsistentService.SendChannelMessageWithFileAsync(AuthState.AccessToken, _selectedChannelId, text, dialog.FileName);
+                MessageInput.Text = string.Empty;
+                await LoadMessagesAsync(_selectedChannelId);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Pošiljanje datoteke ni uspelo.\n{ex.Message}", "Komunikacija", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+            finally
+            {
+                AttachButton.IsEnabled = !string.IsNullOrWhiteSpace(_selectedChannelId);
                 SendButton.IsEnabled = !string.IsNullOrWhiteSpace(_selectedChannelId);
             }
         }
@@ -517,6 +598,7 @@ namespace EAClient.Pages
             var enabled = !string.IsNullOrWhiteSpace(_selectedChannelId);
             MessageInput.IsEnabled = enabled;
             SendButton.IsEnabled = enabled;
+            AttachButton.IsEnabled = enabled;
             if (!enabled)
             {
                 MessageInput.Text = string.Empty;
@@ -535,8 +617,13 @@ namespace EAClient.Pages
                 card.BorderThickness = new Thickness(1);
                 card.CornerRadius = new CornerRadius(AppTheme.CardCornerRadius);
             }
-            ComposeOverlay.Background = new SolidColorBrush(Color.FromArgb(220, 255, 255, 255));
+            var overlayBg = AppTheme.IsDark
+                ? new SolidColorBrush(Color.FromArgb(220, 12, 16, 26))
+                : new SolidColorBrush(Color.FromArgb(220, 255, 255, 255));
+            ComposeOverlay.Background = overlayBg;
+            ConversationTitle.Foreground = AppTheme.TextBrush;
             ConversationMeta.Foreground = AppTheme.SubTextBrush;
+            ChannelsTitleBlock.Foreground = AppTheme.TextBrush;
             MessageInput.Background = AppTheme.BgBrush;
             MessageInput.Foreground = AppTheme.TextBrush;
             MessageInput.BorderBrush = AppTheme.BorderBrush;
@@ -546,7 +633,7 @@ namespace EAClient.Pages
                 textBox.Foreground = AppTheme.TextBrush;
                 textBox.BorderBrush = AppTheme.BorderBrush;
             }
-            foreach (var button in new[] { RefreshButton, SendButton, SearchRecipientsButton, SendNewMessageButton, ComposeFloatingButton, CloseComposeButton })
+            foreach (var button in new[] { RefreshButton, SendButton, AttachButton, SearchRecipientsButton, SendNewMessageButton, ComposeFloatingButton, CloseComposeButton })
             {
                 button.Background = AppTheme.AccentBrush;
                 button.Foreground = Brushes.White;

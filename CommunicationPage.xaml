@@ -32,7 +32,7 @@
                                 VerticalAlignment="Center"
                                 Click="ComposeFloatingButton_Click"
                                 Cursor="Hand"/>
-                        <TextBlock Text="Pogovori" FontSize="16" FontWeight="Bold"/>
+                        <TextBlock x:Name="ChannelsTitleBlock" Text="Pogovori" FontSize="16" FontWeight="Bold"/>
                     </DockPanel>
                     <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,10">
                         <Button x:Name="TabMessages"  Content="Sporočila"     Click="TabMessages_Click"  Padding="10,5" Margin="0,0,6,0"/>
@@ -64,6 +64,7 @@
                         <DockPanel>
                             <Button x:Name="RefreshButton" Content="Osveži" DockPanel.Dock="Right" Click="RefreshButton_Click" Margin="12,0,0,0" Padding="16,8"/>
                             <Button x:Name="SendButton" Content="Pošlji" DockPanel.Dock="Right" Click="SendButton_Click" Margin="12,0,0,0" Padding="18,8"/>
+                            <Button x:Name="AttachButton" Content="📎" DockPanel.Dock="Right" Click="AttachButton_Click" Margin="12,0,0,0" Padding="12,8" ToolTip="Priloži datoteko"/>
                             <TextBox x:Name="MessageInput" AcceptsReturn="True" MinHeight="68" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"/>
                         </DockPanel>
                     </Border>
@@ -117,6 +118,14 @@
                     </StackPanel>
                 </Grid>
             </Border>
+        </Grid>
+
+        <!-- Full-screen image viewer overlay -->
+        <Grid x:Name="ImageViewerOverlay" Grid.RowSpan="2" Visibility="Collapsed"
+              Background="#DD000000" Cursor="Hand" MouseDown="ImageViewerOverlay_MouseDown">
+            <Image x:Name="ImageViewerImage" MaxWidth="1200" MaxHeight="900"
+                   Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"
+                   Margin="20"/>
         </Grid>
     </Grid>
 </Page>
