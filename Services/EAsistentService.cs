@@ -315,6 +315,25 @@ namespace EAClient.Services
             return await SendCommunicationJsonAsync(request);
         }
 
+        private static string GetMimeType(string filePath)
+        {
+            var ext = System.IO.Path.GetExtension(filePath)?.ToLowerInvariant() ?? string.Empty;
+            return ext switch
+            {
+                ".jpg" or ".jpeg" => "image/jpeg",
+                ".png" => "image/png",
+                ".gif" => "image/gif",
+                ".webp" => "image/webp",
+                ".doc" => "application/msword",
+                ".docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                ".xls" => "application/vnd.ms-excel",
+                ".xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                ".ppt" => "application/vnd.ms-powerpoint",
+                ".pptx" => "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                _ => "application/octet-stream"
+            };
+        }
+
         private static async Task<string> UploadCommunicationFileAsync(string token, string filePath)
         {
             if (string.IsNullOrWhiteSpace(_communicationToken) && !string.IsNullOrWhiteSpace(AuthState.AccessToken))
@@ -324,6 +343,7 @@ namespace EAClient.Services
 
             var fileName = System.IO.Path.GetFileName(filePath);
             var fileBytes = await System.IO.File.ReadAllBytesAsync(filePath);
+            var mimeType = GetMimeType(filePath);
 
             HttpRequestMessage BuildRequest(string? requestToken)
             {
@@ -331,7 +351,7 @@ namespace EAClient.Services
                 req.Headers.TryAddWithoutValidation("x-filename", fileName);
                 req.Headers.TryAddWithoutValidation("x-requested-with", "XMLHttpRequest");
                 var content = new ByteArrayContent(fileBytes);
-                content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("text/plain");
+                content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(mimeType);
                 req.Content = content;
                 return req;
             }
