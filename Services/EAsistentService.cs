@@ -200,6 +200,9 @@ namespace EAClient.Services
         public static Task<JsonElement> GetEvaluationsAsync(string token)
             => GetJsonWithRefreshAsync(token, "/m/evaluations?filter=future");
 
+        public static Task<JsonElement> GetEvaluationsRangeAsync(string token, DateTime from, DateTime to)
+            => GetJsonWithRefreshAsync(token, $"/m/evaluations?from={from:yyyy-MM-dd}&to={to:yyyy-MM-dd}");
+
         public static async Task<JsonElement> GetSchoolCateringAsync(string token, DateTime from, DateTime to)
         {
             var endpoints = new[]
@@ -287,6 +290,43 @@ namespace EAClient.Services
                 page_url = $"https://komunikacija.easistent.com/inbox/messages/{channelId}"
             }, _jsonOptions), Encoding.UTF8, "application/json");
             return await SendCommunicationJsonAsync(request);
+        }
+
+        public static async Task<JsonElement> SendChannelMessageWithFileAsync(string token, string channelId, string message, string filePath)
+        {
+            var request = CreateCommunicationRequest(HttpMethod.Post, $"/api/channels/{channelId}/messages", token);
+            var multipart = new MultipartFormDataContent();
+            multipart.Add(new StringContent(channelId), "channel_id");
+            multipart.Add(new StringContent(WrapHtml(message)), "body");
+            multipart.Add(new StringContent($"https://komunikacija.easistent.com/inbox/messages/{channelId}"), "page_url");
+            if (!string.IsNullOrWhiteSpace(filePath) && System.IO.File.Exists(filePath))
+            {
+                var fileName = System.IO.Path.GetFileName(filePath);
+                var fileBytes = await System.IO.File.ReadAllBytesAsync(filePath);
+                var fileContent = new ByteArrayContent(fileBytes);
+                fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(GetMimeType(fileName));
+                multipart.Add(fileContent, "files[]", fileName);
+            }
+            request.Content = multipart;
+            return await SendCommunicationJsonAsync(request);
+        }
+
+        private static string GetMimeType(string fileName)
+        {
+            var ext = System.IO.Path.GetExtension(fileName).ToLowerInvariant();
+            return ext switch
+            {
+                ".jpg" or ".jpeg" => "image/jpeg",
+                ".png" => "image/png",
+                ".gif" => "image/gif",
+                ".webp" => "image/webp",
+                ".pdf" => "application/pdf",
+                ".doc" => "application/msword",
+                ".docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                ".xls" => "application/vnd.ms-excel",
+                ".xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                _ => "application/octet-stream"
+            };
         }
 
         public static async Task<JsonElement> GetChannelsAsync(string token, string channelType = "message", int limit = 20, string? to = null)

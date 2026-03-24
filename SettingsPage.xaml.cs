@@ -122,6 +122,28 @@ namespace EAClient.Pages
             AccountCard.Background = AppTheme.CardBrush;
             AccountCard.BorderBrush = AppTheme.BorderBrush;
             FontFamily = new FontFamily(AppTheme.FontFamily);
+
+            // Update all text elements
+            var headerBrush = AppTheme.TextBrush;
+            var labelBrush = AppTheme.TextBrush;
+            var hintBrush = AppTheme.SubTextBrush;
+            var dividerBrush = AppTheme.BorderBrush;
+
+            TbAppearanceHeader.Foreground = headerBrush;
+            TbAccountHeader.Foreground = headerBrush;
+            TbExperienceLabel.Foreground = labelBrush;
+            TbExperienceHint.Foreground = hintBrush;
+            TbThemeLabel.Foreground = labelBrush;
+            TbAnimLabel.Foreground = labelBrush;
+            TbAnimHint.Foreground = hintBrush;
+            TbAutoLoginLabel.Foreground = labelBrush;
+            SavedCredText.Foreground = hintBrush;
+            TbDeleteLabel.Foreground = labelBrush;
+            TbDeleteHint.Foreground = hintBrush;
+
+            DividerA.Background = dividerBrush;
+            DividerB.Background = dividerBrush;
+            DividerC.Background = dividerBrush;
         }
     }
 }
